@@ -30,7 +30,7 @@ void setDefault(Info_t* info){
 int main(int argc, char* argv[]){
     Info_t* Information = initInfo();
 
-    /*caso in cui il valori passati non sono corretti*/
+    /*caso in cui il valori passati non sono corretti o incompleti*/
     if((argc == 3 && strcmp(argv[1], "-cf")) || argc == 2){
         printf("use: %s [-cf configurationfilename]\n", argv[0]);
         return EXIT_FAILURE;
