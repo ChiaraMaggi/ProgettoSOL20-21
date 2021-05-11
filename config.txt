@@ -1,0 +1,13 @@
+--File Storage Server Configuration--
+
+-Number of Workers Thread:
+NUM_WORKERS_THREAD = 100
+
+-Max Number of Files:
+MAX_NUM_FILE = 200
+
+-Storage Size (in Mbyte):
+STORAGE_SIZE = 1024
+
+-Socket Name (path assoluto):
+SOCKET_NAME = ./SOLsocket.sk
