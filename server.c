@@ -36,7 +36,7 @@ int main(int argc, char* argv[]){
         return EXIT_FAILURE;
     }
 
-    /*caso in cui il file di congif non è passato*/
+    /*caso in cui il file di congifigurazione non è passato*/
     if(argc == 1){
         printf("default configuration (configuration file is not passed):\n");
         setDefault(Information);
