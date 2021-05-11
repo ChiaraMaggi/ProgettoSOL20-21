@@ -15,16 +15,16 @@
 #include "parsing.h"
 #include "utils.h"
 
-#define WORKERS_THREAD 10
-#define MAX_FILE 100
-#define STORAGE_SIZE 512
-#define SOCKET_NAME "./SOLsocket.sk"
+#define DEFAULT_WORKERS_THREAD 10
+#define DEFAULT_MAX_FILE 100
+#define DEFAULT_STORAGE_SIZE 512
+#define DEFAULT_SOCKET_NAME "./SOLsocket.sk"
 
 void setDefault(Info_t* info){
-    info->workers_thread = WORKERS_THREAD;
-    info->max_file = MAX_FILE;
-    info->storage_size = STORAGE_SIZE;
-    strcpy(info->socket_name, SOCKET_NAME);
+    info->workers_thread = DEFAULT_WORKERS_THREAD;
+    info->max_file = DEFAULT_MAX_FILE;
+    info->storage_size = DEFAULT_STORAGE_SIZE;
+    strcpy(info->socket_name, DEFAULT_SOCKET_NAME);
 }
 
 int main(int argc, char* argv[]){
@@ -38,7 +38,7 @@ int main(int argc, char* argv[]){
 
     /*caso in cui il file di congif non è passato*/
     if(argc == 1){
-        printf("default configuration: configuration file is not passed\n");
+        printf("default configuration (configuration file is not passed):\n");
         setDefault(Information);
     }
     else{ /*caso corretto*/
