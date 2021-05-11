@@ -13,7 +13,9 @@
 richiesta di connessione, la connessione da parte del client viene ripetuta dopo ‘msec’ millisecondi e fino allo
 scadere del tempo assoluto ‘abstime’ specificato come terzo argomento. Ritorna 0 in caso di successo, -1 in caso
 di fallimento, errno viene settato opportunamente.*/
-int openConnection(const char* sockname, int msec, const struct timespec abstime);
+int openConnection(const char* sockname, int msec, const struct timespec abstime){
+    
+}
 
 /*Chiude la connessione AF_UNIX associata al socket file sockname. Ritorna 0 in caso di successo, -1 in caso di
 fallimento, errno viene settato opportunamente.*/

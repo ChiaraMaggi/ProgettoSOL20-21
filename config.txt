@@ -10,4 +10,4 @@ MAX_NUM_FILE = 200
 STORAGE_SIZE = 1024
 
 -Socket Name (path assoluto):
-SOCKET_NAME = ./SOLsocket.sk
+SOCKET_NAME = SOLsocket.sk

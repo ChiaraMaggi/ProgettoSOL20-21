@@ -34,15 +34,16 @@ void setDefault(Info_t* info){
     strcpy(info->socket_name, DEFAULT_SOCKET_NAME);
 }
 
+/*
 static void* fun(void* arg){
 
-}
+}*/
 
 int main(int argc, char* argv[]){
     /*
-    Iniziallizazione server
+    Inizializzazione server
     */
-    Info_t* Information = initInfo();
+    Information = initInfo();
 
     /*caso in cui il valori passati non sono corretti o incompleti*/
     if((argc == 3 && strcmp(argv[1], "-cf")) || argc == 2){
@@ -62,22 +63,23 @@ int main(int argc, char* argv[]){
             setDefault(Information);
         }    
     }
-    //printf("%d %d %d %s\n", Information->workers_thread, Information->max_file, Information->storage_size, Information->socket_name);
-     
+    printf("%d %d %d %s\n", Information->workers_thread, Information->max_file, Information->storage_size, Information->socket_name);
+
+    /*
     int fd_skt;
-    /*creazione struttura socket*/
+    creazione struttura socket
     struct sockaddr_un sa;
     strncpy(sa.sun_path, Information->socket_name, UNIX_PATH_MAX);
     sa.sun_family = AF_UNIX;
     fd_skt = socket(AF_UNIX, SOCK_STREAM, 0);
     bind(fd_skt, (struct sockaddr*)&sa, sizeof(sa));
 
-    /*creazione thread master*/
+    creazione thread master
     pthread_t tidM;
     if(pthread_create(&tidM, NULL, &fun, NULL) != 0){
         fprintf(stderr, "ERROR: impossible to create master thread\n");
         return EXIT_FAILURE;
     }
-
-    
+    */
+   return 0;
 }

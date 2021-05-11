@@ -25,6 +25,11 @@ typedef struct Info
 }Info_t;
 
 /*
+Variabile globale configurazione
+*/
+Info_t* Information;
+
+/*
 Inizializzazione della struct
 */
 Info_t* initInfo();
