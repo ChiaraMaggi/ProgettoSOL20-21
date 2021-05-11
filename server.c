@@ -11,6 +11,11 @@
 #include<stdlib.h>
 #include<string.h>
 #include<errno.h>
+#include<sys/types.h>
+#include<sys/socket.h>
+#include<unistd.h>
+#include<sys/un.h>
+#include<pthread.h>
 
 #include "parsing.h"
 #include "utils.h"
@@ -18,7 +23,9 @@
 #define DEFAULT_WORKERS_THREAD 10
 #define DEFAULT_MAX_FILE 100
 #define DEFAULT_STORAGE_SIZE 512
-#define DEFAULT_SOCKET_NAME "./SOLsocket.sk"
+#define DEFAULT_SOCKET_NAME "SOLsocket.sk"
+
+#define UNIX_PATH_MAX 108
 
 void setDefault(Info_t* info){
     info->workers_thread = DEFAULT_WORKERS_THREAD;
@@ -27,7 +34,14 @@ void setDefault(Info_t* info){
     strcpy(info->socket_name, DEFAULT_SOCKET_NAME);
 }
 
+static void* fun(void* arg){
+
+}
+
 int main(int argc, char* argv[]){
+    /*
+    Iniziallizazione server
+    */
     Info_t* Information = initInfo();
 
     /*caso in cui il valori passati non sono corretti o incompleti*/
@@ -48,6 +62,22 @@ int main(int argc, char* argv[]){
             setDefault(Information);
         }    
     }
-    printf("%d %d %d %s\n", Information->workers_thread, Information->max_file, Information->storage_size, Information->socket_name);
-    return 0;   
+    //printf("%d %d %d %s\n", Information->workers_thread, Information->max_file, Information->storage_size, Information->socket_name);
+     
+    int fd_skt;
+    /*creazione struttura socket*/
+    struct sockaddr_un sa;
+    strncpy(sa.sun_path, Information->socket_name, UNIX_PATH_MAX);
+    sa.sun_family = AF_UNIX;
+    fd_skt = socket(AF_UNIX, SOCK_STREAM, 0);
+    bind(fd_skt, (struct sockaddr*)&sa, sizeof(sa));
+
+    /*creazione thread master*/
+    pthread_t tidM;
+    if(pthread_create(&tidM, NULL, &fun, NULL) != 0){
+        fprintf(stderr, "ERROR: impossible to create master thread\n");
+        return EXIT_FAILURE;
+    }
+
+    
 }
