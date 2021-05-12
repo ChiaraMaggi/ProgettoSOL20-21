@@ -42,6 +42,13 @@ int main(void){
         else exit(EXIT_FAILURE); 
     }
     printf("Client\n");
+
+    
+
+
+
+
+
     close(sockfd);
     exit(EXIT_SUCCESS); 
 }
