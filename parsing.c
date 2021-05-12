@@ -54,17 +54,17 @@ void checkAndSet(int* x, char* value, char* var, int check, int n){
 int parsConfiguration(char* filepath, Info_t* config){
     /*variabili per la configurazione*/
     char* parameter;
-    ERR_NULL((parameter = malloc(MAX_LEN*sizeof(char))), "malloc parameter name");
+    CHECK_EQ_EXIT((parameter = malloc(MAX_LEN*sizeof(char))), NULL, "malloc parameter name");
     char* value;
-    ERR_NULL((value = malloc(MAX_LEN*sizeof(char))), "malloc parameter value");
+    CHECK_EQ_EXIT((value = malloc(MAX_LEN*sizeof(char))), NULL, "malloc parameter value");
 
     /*buffer per lettura del file di configurazione*/
     char* buff;
-    ERR_NULL((buff = malloc(MAX_LEN*sizeof(char))), "malloc parsing buffer");
+    CHECK_EQ_EXIT((buff = malloc(MAX_LEN*sizeof(char))), NULL, "malloc parsing buffer");
 
     /*apertura file congifurazione*/
     FILE* file;
-    ERR_NULL((file = fopen(filepath, "r")), "ERROR opening configuration file");
+    CHECK_EQ_EXIT((file = fopen(filepath, "r")), NULL, "ERROR opening configuration file");
 
     /*scorro tutto il file*/
     while(fgets(buff, MAX_LEN, file) != NULL){

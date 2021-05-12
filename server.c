@@ -16,6 +16,7 @@
 #include<unistd.h>
 #include<sys/un.h>
 #include<pthread.h>
+#include<assert.h>
 
 #include "parsing.h"
 #include "utils.h"
@@ -26,6 +27,7 @@
 #define DEFAULT_SOCKET_NAME "SOLsocket.sk"
 
 #define UNIX_PATH_MAX 108
+#define SOMAXCON 100
 
 void setDefault(Info_t* info){
     info->workers_thread = DEFAULT_WORKERS_THREAD;
@@ -63,23 +65,31 @@ int main(int argc, char* argv[]){
             setDefault(Information);
         }    
     }
-    printf("%d %d %d %s\n", Information->workers_thread, Information->max_file, Information->storage_size, Information->socket_name);
+    //printf("%d %d %d %s\n", Information->workers_thread, Information->max_file, Information->storage_size, Information->socket_name);
 
-    /*
-    int fd_skt;
-    creazione struttura socket
-    struct sockaddr_un sa;
-    strncpy(sa.sun_path, Information->socket_name, UNIX_PATH_MAX);
-    sa.sun_family = AF_UNIX;
-    fd_skt = socket(AF_UNIX, SOCK_STREAM, 0);
-    bind(fd_skt, (struct sockaddr*)&sa, sizeof(sa));
+	int error;
+	int fd_server /*fd_client*/;
+	struct sockaddr_un sa;
+    //memset(&sa, '0', sizeof(sa));
+	strncpy(sa.sun_path, Information->socket_name, UNIX_PATH_MAX);
+	sa.sun_family = AF_UNIX;
+	CHECK_EQ_EXIT((fd_server = socket(AF_UNIX, SOCK_STREAM, 0)), -1, "socket");
+	CHECK_EQ_EXIT((error = bind(fd_server, (struct sockaddr*) &sa, sizeof(sa))), -1, "bind");
 
-    creazione thread master
-    pthread_t tidM;
-    if(pthread_create(&tidM, NULL, &fun, NULL) != 0){
-        fprintf(stderr, "ERROR: impossible to create master thread\n");
-        return EXIT_FAILURE;
-    }
-    */
-   return 0;
+/*
+	while(1)
+	{
+		fprintf(stdout, "SERVER: listening...\n");
+		CHECK_EQ_EXIT((error = listen(fd_server, SOMAXCON)), -1, "listen");
+		CHECK_EQ_EXIT((fd_client = accept(fd_server, NULL, 0)), -1, "accept");
+		fprintf(stdout, "SERVER: new client accepted %d\n", fd_client);
+	}
+*/
+	CHECK_EQ_EXIT((error = close(fd_server)), -1, "close");
+
+
+
+    
+    freeInfo(Information);
+    return 0;
 }
