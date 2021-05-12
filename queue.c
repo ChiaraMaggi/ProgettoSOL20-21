@@ -38,22 +38,22 @@ Queue_t *initQueue() {
     q->tail = q->head;    
     q->qlen = 0;
     if (pthread_mutex_init(&q->qlock, NULL) != 0) {
-	perror("mutex init");
-	return NULL;
+	    perror("mutex init");
+	    return NULL;
     }
     if (pthread_cond_init(&q->qcond, NULL) != 0) {
-	perror("mutex cond");
-	if (&q->qlock) pthread_mutex_destroy(&q->qlock);
-	return NULL;
+	    perror("mutex cond");
+	    if (&q->qlock) pthread_mutex_destroy(&q->qlock);
+	        return NULL;
     }    
     return q;
 }
 
 void deleteQueue(Queue_t *q) {
     while(q->head != q->tail) {
-	Node_t *p = (Node_t*)q->head;
-	q->head = q->head->next;
-	freeNode(p);
+	    Node_t *p = (Node_t*)q->head;
+	    q->head = q->head->next;
+	    freeNode(p);
     }
     if (q->head) freeNode((void*)q->head);
     if (&q->qlock)  pthread_mutex_destroy(&q->qlock);
@@ -70,8 +70,8 @@ int push(Queue_t *q, void *data) {
 
     LockQueue(q);
     q->tail->next = n;
-    q->tail       = n;
-    q->qlen      += 1;
+    q->tail = n;
+    q->qlen += 1;
     UnlockQueueAndSignal(q);
     return 0;
 }
@@ -80,14 +80,14 @@ void *pop(Queue_t *q) {
     if (q == NULL) { errno= EINVAL; return NULL;}
     LockQueue(q);
     while(q->head == q->tail) {
-	UnlockQueueAndWait(q);
+	    UnlockQueueAndWait(q);
     }
     // locked
     assert(q->head->next);
     Node_t *n  = (Node_t *)q->head;
     void *data = (q->head->next)->data;
-    q->head    = q->head->next;
-    q->qlen   -= 1;
+    q->head = q->head->next;
+    q->qlen -= 1;
     assert(q->qlen>=0);
     UnlockQueue(q);
     freeNode(n);

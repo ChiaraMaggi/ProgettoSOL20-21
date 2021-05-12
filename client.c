@@ -20,6 +20,7 @@
 
 #include "parsing.h"
 #include "utils.h"
+#include "api.h"
 
 #define UNIX_PATH_MAX 108
 #define SOMAXCON 100
@@ -40,8 +41,7 @@ int main(void){
             sleep(1); /* sock non esise */
         else exit(EXIT_FAILURE); 
     }
-    printf("Client ciao\n");
+    printf("Client\n");
     close(sockfd);
     exit(EXIT_SUCCESS); 
-
 }

@@ -14,20 +14,20 @@ OBJ1 = server.o
 OBJ2 = client.o
 
 # file oggetto della libreria
-LIB_OBJ = parsing.o utils.o queue.o
+LIB_OBJ = parsing.o utils.o queue.o api.o
 
 # questo non serve ma è buona norma
-TARGET = eseguibile1 eseguibile2 libfunzioni.a
+TARGET = server client libfunzioni.a
 
 all: $(TARGET)
 
 # $^ viene sostituito dalla lista dopo i 2 punti (in questo caso: $(OBJ) libfunzioni.a)
 # $@ viene sostituito dal nome del target (in questo caso: eseguibile)
 # non servono ma sono comodi per non dover scrivere tanto 
-eseguibile1: $(OBJ1) libfunzioni.a
+server: $(OBJ1) libfunzioni.a
 	$(CC) $^ -o $@ $(LIB)
 
-eseguibile2: $(OBJ2) libfunzioni.a
+client: $(OBJ2) libfunzioni.a
 	$(CC) $^ -o $@ $(LIB)
 
 libfunzioni.a: $(LIB_OBJ)
@@ -42,6 +42,9 @@ utils.o: utils.h utils.c
 queue.o: queue.h queue.c
 	$(CC) $(CFLAGS) queue.c -o queue.o
 
+api.o: api.h api.c
+	$(CC) $(CFLAGS) api.c -o api.o
+	
 server.o: server.c
 	$(CC) $(CFLAGS) server.c -o server.o
 
@@ -49,4 +52,4 @@ client.o: client.c
 	$(CC) $(CFLAGS) client.c -o client.o
 
 clean:
-	rm *.o *.a *.sk eseguibile1 eseguibile2
+	rm *.o *.a *.sk server client

@@ -22,24 +22,24 @@
 richiesta di connessione, la connessione da parte del client viene ripetuta dopo ‘msec’ millisecondi e fino allo
 scadere del tempo assoluto ‘abstime’ specificato come terzo argomento. Ritorna 0 in caso di successo, -1 in caso
 di fallimento, errno viene settato opportunamente.*/
-int openConnection(const char* sockname, int msec, const struct timespec abstime){
-    int fd_skt;
+//int openConnection(const char* sockname, int msec, const struct timespec abstime){
+    /*int fd_skt;
     struct sockaddr_un sa;
     struct timespec nowtime;
     clock_gettime(CLOCK_REALTIME, &nowtime);
     strncpy(sa.sun_path, sockname, UNIX_PATH_MAX);
     sa.sun_family = AF_UNIX;
     fd_skt=socket(AF_UNIX,SOCK_STREAM,0);
-        /*gestico la situzione in cui il client faccia richesta al server che non è stato ancora svegliato*/
+        gestico la situzione in cui il client faccia richesta al server che non è stato ancora svegliato
         while ((connect(fd_skt,(struct sockaddr*)&sa, sizeof(sa)) == -1 ) || (abstime.tv_sec - nowtime.tv_sec)!= 0){
             if ( errno == ENOENT ){
-                sleep(msec); /* sock non esise */
+                sleep(msec);  sock non esise 
                 clock_gettime(CLOCK_REALTIME, &nowtime);
             }
             else return -1;
-        }
-    return 0;
-}
+        }*/
+   // return 0;
+//}
 
 /*Chiude la connessione AF_UNIX associata al socket file sockname. Ritorna 0 in caso di successo, -1 in caso di
 fallimento, errno viene settato opportunamente.*/
