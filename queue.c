@@ -76,7 +76,7 @@ int push(Queue_t *q, void *data) {
     return 0;
 }
 
-void *pop(Queue_t *q) {        
+void* pop(Queue_t *q) {        
     if (q == NULL) { errno= EINVAL; return NULL;}
     LockQueue(q);
     while(q->head == q->tail) {

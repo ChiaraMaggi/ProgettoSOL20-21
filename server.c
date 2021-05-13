@@ -36,20 +36,14 @@ void setDefault(Info_t* info){
     strcpy(info->socket_name, DEFAULT_SOCKET_NAME);
 }
 
-void cleanup() {
-    unlink(Information->socket_name);
+void cleanup(Info_t* info) {
+    unlink(info->socket_name);
 }
 
-/*
-static void* fun(void* arg){
-
-}*/
-
 int main(int argc, char* argv[]){
-    /*
-    Inizializzazione server
-    */
-    Information = initInfo();
+
+    /*-----------INIZIALIZZO SERVER-----------------*/
+    Info_t* Information = initInfo();
 
     /*caso in cui il valori passati non sono corretti o incompleti*/
     if((argc == 3 && strcmp(argv[1], "-f")) || argc == 2){
@@ -69,31 +63,31 @@ int main(int argc, char* argv[]){
             setDefault(Information);
         }    
     }
-    //printf("%d %d %d %s\n", Information->workers_thread, Information->max_file, Information->storage_size, Information->socket_name);
-    cleanup();
-	int error;
+
+    /*-----------CREAZIONE SOCKET-------------*/
+    cleanup(Information);
 	int fd_server, fd_client;
 	struct sockaddr_un sa;
-    //memset(&sa, '0', sizeof(sa));
+    memset(&sa, '0', sizeof(sa));
 	strncpy(sa.sun_path, Information->socket_name, UNIX_PATH_MAX);
 	sa.sun_family = AF_UNIX;
 	CHECK_EQ_EXIT((fd_server = socket(AF_UNIX, SOCK_STREAM, 0)), -1, "socket");
-	CHECK_EQ_EXIT((error = bind(fd_server, (struct sockaddr*)&sa, sizeof(sa))), -1, "bind");
+	CHECK_EQ_EXIT(bind(fd_server, (struct sockaddr*)&sa, sizeof(sa)), -1, "bind");
 
-
+    /*-------------GESTIONE CLIENT------------*/
+    char buf[100];
+    int N = 100;
 	while(1)
 	{
 		fprintf(stdout, "SERVER: listening...\n");
-		CHECK_EQ_EXIT((error = listen(fd_server, SOMAXCON)), -1, "listen");
-		CHECK_EQ_EXIT((fd_client = accept(fd_server, NULL, 0)), -1, "accept");
+		CHECK_EQ_EXIT(listen(fd_server, SOMAXCON), -1, "listen");
+		CHECK_EQ_EXIT(fd_client = accept(fd_server, NULL, 0), -1, "accept");
 		fprintf(stdout, "SERVER: new client accepted %d\n", fd_client);
+        read(fd_client,buf,N);
+        printf("Server got: %s\n",buf) ;
+        write(fd_client,"Bye!",5);
 	}
-
-	CHECK_EQ_EXIT((error = close(fd_server)), -1, "close");
-
-
-
-    
+	CHECK_EQ_EXIT(close(fd_server), -1, "close");
     freeInfo(Information);
     return 0;
 }

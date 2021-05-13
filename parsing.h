@@ -25,11 +25,6 @@ typedef struct Info
 }Info_t;
 
 /*
-Variabile globale configurazione
-*/
-Info_t* Information;
-
-/*
 Inizializzazione della struct
 */
 Info_t* initInfo();
@@ -48,10 +43,5 @@ void checkAndSet(int*, char*,char*, int, int);
 Funzione che effettua il parsing della configurazione server
 */
 int parsConfiguration(char*, Info_t*);
-
-/*
-Funzione che restituisce il nome del socket presente sul file di congifurazione
-*/
-char* getSocketName(char*);
 
 #endif

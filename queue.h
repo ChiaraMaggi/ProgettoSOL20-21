@@ -7,8 +7,8 @@
  *
  */
 typedef struct Node {
-    void        * data;
-    struct Node * next;
+    void* data;
+    struct Node* next;
 } Node_t;
 
 /** Struttura dati coda.

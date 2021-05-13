@@ -24,10 +24,9 @@
 
 #define UNIX_PATH_MAX 108
 #define SOMAXCON 100
-//#define SOCKETNAME "SOLsocket.sk"
+#define SOCKETNAME "SOLsocket.sk"
 
 int main(void){
-    char* SOCKETNAME = getSocketName("config.txt");
 
     int sockfd;
     struct sockaddr_un server_addr;
@@ -45,7 +44,11 @@ int main(void){
             exit(EXIT_FAILURE); 
         }
     }
-    printf("Client\n");
+    char buf[100];
+    int N = 100;
+    CHECK_EQ_EXIT(write(sockfd, "Hello!", 7), -1, "write");
+    CHECK_EQ_EXIT(read(sockfd, buf, N), -1, "read");
+    printf("Client got: %s\n",buf) ;
     close(sockfd);
     exit(EXIT_SUCCESS); 
 }
