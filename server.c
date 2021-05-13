@@ -36,6 +36,10 @@ void setDefault(Info_t* info){
     strcpy(info->socket_name, DEFAULT_SOCKET_NAME);
 }
 
+void cleanup() {
+    unlink(Information->socket_name);
+}
+
 /*
 static void* fun(void* arg){
 
@@ -55,7 +59,7 @@ int main(int argc, char* argv[]){
 
     /*caso in cui il file di congifigurazione non è passato*/
     if(argc == 1){
-        printf("default configuration (configuration file is not passed):\n");
+        printf("default configuration (configuration file is not passed)\n");
         setDefault(Information);
     }
     else{ /*caso corretto*/
@@ -66,17 +70,17 @@ int main(int argc, char* argv[]){
         }    
     }
     //printf("%d %d %d %s\n", Information->workers_thread, Information->max_file, Information->storage_size, Information->socket_name);
-
+    cleanup();
 	int error;
-	int fd_server /*fd_client*/;
+	int fd_server, fd_client;
 	struct sockaddr_un sa;
     //memset(&sa, '0', sizeof(sa));
 	strncpy(sa.sun_path, Information->socket_name, UNIX_PATH_MAX);
 	sa.sun_family = AF_UNIX;
 	CHECK_EQ_EXIT((fd_server = socket(AF_UNIX, SOCK_STREAM, 0)), -1, "socket");
-	CHECK_EQ_EXIT((error = bind(fd_server, (struct sockaddr*) &sa, sizeof(sa))), -1, "bind");
+	CHECK_EQ_EXIT((error = bind(fd_server, (struct sockaddr*)&sa, sizeof(sa))), -1, "bind");
 
-/*
+
 	while(1)
 	{
 		fprintf(stdout, "SERVER: listening...\n");
@@ -84,7 +88,7 @@ int main(int argc, char* argv[]){
 		CHECK_EQ_EXIT((fd_client = accept(fd_server, NULL, 0)), -1, "accept");
 		fprintf(stdout, "SERVER: new client accepted %d\n", fd_client);
 	}
-*/
+
 	CHECK_EQ_EXIT((error = close(fd_server)), -1, "close");
 
 
