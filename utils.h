@@ -8,6 +8,9 @@
 #include<string.h>
 #include<pthread.h>
 
+#define UNIX_PATH_MAX 108
+#define SOMAXCON 100
+
 // macro di utilità per controllare errori
 #define CHECK_EQ_EXIT(X, val, str) \
   if ((X)==val) {	\
@@ -19,6 +22,12 @@
   if ((X)!=val) { \
     perror(str); \
     exit(EXIT_FAILURE); \
+  }
+
+#define CHECK_EQ_RETURN(X, val, str, ret) \
+  if((X)==val) { \
+    perror(str); \
+    return (ret); \
   }
 
 #define LOCK(l) \

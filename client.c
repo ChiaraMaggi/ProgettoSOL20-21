@@ -17,38 +17,41 @@
 #include<sys/un.h>
 #include<pthread.h>
 #include<assert.h>
+#include<time.h>
 
 #include "parsing.h"
 #include "utils.h"
 #include "api.h"
+#include "icl_hash.h"
 
-#define UNIX_PATH_MAX 108
-#define SOMAXCON 100
 #define SOCKETNAME "SOLsocket.sk"
+#define O_CREATE 0x01
+#define O_LOCK 0x10
 
 int main(void){
-
-    int sockfd;
-    struct sockaddr_un server_addr;
-    CHECK_EQ_EXIT((sockfd = socket(AF_UNIX, SOCK_STREAM, 0)), -1, "socket");
-    memset(&server_addr, '0', sizeof(server_addr));
-    server_addr.sun_family = AF_UNIX;    
-    strncpy(server_addr.sun_path, SOCKETNAME, strlen(SOCKETNAME)+1);
-    /*gestico la situzione in cui il client faccia richesta al server che non è stato ancora
-    svegliato e quindi invece di dare errore riposa per 1 sec e poi riprova*/
-    while (connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1 ){
-        if ( errno == ENOENT )
-            sleep(1); /* sock non esise */
-        else {
-            printf("il socket esiste gia ma il server non è ancora stato svegliato\n");
-            exit(EXIT_FAILURE); 
-        }
+    
+    struct timespec abstime;
+    clock_gettime(CLOCK_REALTIME, &abstime);
+    abstime.tv_sec += 5;
+    if(openConnection(SOCKETNAME, 2000, abstime) == -1){
+        perror("opening connection");
+        return (EXIT_FAILURE);
     }
-    char buf[100];
+    sleep(1);
+    if(openFile("ciao.txt", O_CREATE) == -1){
+        perror("operning file");
+        return (EXIT_FAILURE);
+    }
+
+    if(closeConnection(SOCKETNAME) == -1){
+        perror("closing connection");
+        return (EXIT_FAILURE);
+    }
+    /*char buf[100];
     int N = 100;
     CHECK_EQ_EXIT(write(sockfd, "Hello!", 7), -1, "write");
     CHECK_EQ_EXIT(read(sockfd, buf, N), -1, "read");
     printf("Client got: %s\n",buf) ;
-    close(sockfd);
+    close(sockfd);*/
     exit(EXIT_SUCCESS); 
 }

@@ -28,6 +28,9 @@ static inline void UnlockQueueAndSignal(Queue_t *q) { SIGNAL(&q->qcond); UNLOCK(
 
 /* ------------------- interfaccia della coda ------------------ */
 
+/*
+Inizializzazione della lista
+*/
 Queue_t *initQueue() {
     Queue_t *q = allocQueue();
     if (!q) return NULL;
@@ -49,6 +52,9 @@ Queue_t *initQueue() {
     return q;
 }
 
+/*
+Eliminazione edlla lista
+*/
 void deleteQueue(Queue_t *q) {
     while(q->head != q->tail) {
 	    Node_t *p = (Node_t*)q->head;
@@ -61,6 +67,9 @@ void deleteQueue(Queue_t *q) {
     free(q);
 }
 
+/*
+Inserimento in fondo alla lista
+*/
 int push(Queue_t *q, void *data) {
     if ((q == NULL) || (data == NULL)) { errno= EINVAL; return -1;}
     Node_t *n = allocNode();
@@ -76,6 +85,9 @@ int push(Queue_t *q, void *data) {
     return 0;
 }
 
+/*
+Rimozione in fondo alla lista
+*/
 void* pop(Queue_t *q) {        
     if (q == NULL) { errno= EINVAL; return NULL;}
     LockQueue(q);
@@ -93,6 +105,21 @@ void* pop(Queue_t *q) {
     freeNode(n);
     return data;
 } 
+
+/*
+Cercare un nodo in base ad una chiave
+*/
+int findByKey(Queue_t* q, void* key){
+    Node_t *cur = q->head;
+    int cont=0;
+    for (; cur != NULL; cur = cur->next){
+        if (cur->data == key)
+        cont++;
+    }
+    return cont;
+}
+
+
 // NOTA: in questa funzione si puo' accedere a q->qlen NON in mutua esclusione
 //       ovviamente il rischio e' quello di leggere un valore non aggiornato, ma nel
 //       caso di piu' produttori e consumatori la lunghezza della coda per un thread

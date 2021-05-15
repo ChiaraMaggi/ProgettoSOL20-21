@@ -24,10 +24,7 @@
 #define DEFAULT_WORKERS_THREAD 10
 #define DEFAULT_MAX_FILE 100
 #define DEFAULT_STORAGE_SIZE 512
-#define DEFAULT_SOCKET_NAME "SOLsocket.sk"
-
-#define UNIX_PATH_MAX 108
-#define SOMAXCON 100
+#define DEFAULT_SOCKET_NAME "/SOLsocket.sk"
 
 void setDefault(Info_t* info){
     info->workers_thread = DEFAULT_WORKERS_THREAD;
@@ -47,7 +44,7 @@ int main(int argc, char* argv[]){
 
     /*caso in cui il valori passati non sono corretti o incompleti*/
     if((argc == 3 && strcmp(argv[1], "-f")) || argc == 2){
-        printf("use: %s [-f configurationfilename]\n", argv[0]);
+        printf("use: %s [-f pathconfigurationfile]\n", argv[0]);
         return EXIT_FAILURE;
     }
 
@@ -75,17 +72,17 @@ int main(int argc, char* argv[]){
 	CHECK_EQ_EXIT(bind(fd_server, (struct sockaddr*)&sa, sizeof(sa)), -1, "bind");
 
     /*-------------GESTIONE CLIENT------------*/
-    char buf[100];
-    int N = 100;
+    /*char buf[100];
+    int N = 100;*/
 	while(1)
 	{
 		fprintf(stdout, "SERVER: listening...\n");
 		CHECK_EQ_EXIT(listen(fd_server, SOMAXCON), -1, "listen");
 		CHECK_EQ_EXIT(fd_client = accept(fd_server, NULL, 0), -1, "accept");
 		fprintf(stdout, "SERVER: new client accepted %d\n", fd_client);
-        read(fd_client,buf,N);
+        /*read(fd_client,buf,N);
         printf("Server got: %s\n",buf) ;
-        write(fd_client,"Bye!",5);
+        write(fd_client,"Bye!",5);*/
 	}
 	CHECK_EQ_EXIT(close(fd_server), -1, "close");
     freeInfo(Information);

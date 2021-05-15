@@ -5,7 +5,7 @@
  * @copyright Copyright (c) 2021
  * 
  */
-
+#define _POSIX_C_SOURCE 200112L
 #include<stdlib.h>
 #include<stdio.h>
 #include<string.h>
@@ -14,36 +14,58 @@
 #include<unistd.h>
 #include<sys/types.h>
 #include<sys/socket.h>
-#include<sys/un.h> /* ind AF_UNIX */
+#include<sys/un.h>
+#include<stdarg.h>
+#include<fcntl.h>
+#include <sys/stat.h>
 
-#define UNIX_PATH_MAX 108
+#include "utils.h"
+#include "icl_hash.h"
+#include "data.h"
+
+#define NUMBUCKETS 100
+
+/*variabile globale per fd del client*/
+static int cfd_socket = 0;
+static Hashtable_t* hashtable = NULL;
 
 /*Viene aperta una connessione AF_UNIX al socket file sockname. Se il server non accetta immediatamente la
 richiesta di connessione, la connessione da parte del client viene ripetuta dopo ‘msec’ millisecondi e fino allo
 scadere del tempo assoluto ‘abstime’ specificato come terzo argomento. Ritorna 0 in caso di successo, -1 in caso
 di fallimento, errno viene settato opportunamente.*/
-//int openConnection(const char* sockname, int msec, const struct timespec abstime){
-    /*int fd_skt;
-    struct sockaddr_un sa;
-    struct timespec nowtime;
-    clock_gettime(CLOCK_REALTIME, &nowtime);
-    strncpy(sa.sun_path, sockname, UNIX_PATH_MAX);
-    sa.sun_family = AF_UNIX;
-    fd_skt=socket(AF_UNIX,SOCK_STREAM,0);
-        gestico la situzione in cui il client faccia richesta al server che non è stato ancora svegliato
-        while ((connect(fd_skt,(struct sockaddr*)&sa, sizeof(sa)) == -1 ) || (abstime.tv_sec - nowtime.tv_sec)!= 0){
-            if ( errno == ENOENT ){
-                sleep(msec);  sock non esise 
-                clock_gettime(CLOCK_REALTIME, &nowtime);
-            }
-            else return -1;
-        }*/
-   // return 0;
-//}
+int openConnection(const char* sockname, int msec, const struct timespec abstime){
+    /*strutture per la connessione*/
+    struct sockaddr_un server_addr;
+
+    /*settaggio della struttura*/
+    memset(&server_addr, '0', sizeof(server_addr));
+    server_addr.sun_family = AF_UNIX;
+    strncpy(server_addr.sun_path, sockname, UNIX_PATH_MAX);
+    CHECK_EQ_EXIT((cfd_socket=socket(AF_UNIX,SOCK_STREAM,0)), -1, "socket");
+
+    int sleeptime = msec/1000;
+    int connectionflag;
+    time_t trytime;
+    time(&trytime);
+
+    /*gestico la situzione in cui il client faccia richesta al server che non è stato ancora svegliato*/
+    while (((connectionflag = connect(cfd_socket,(struct sockaddr*)&server_addr, sizeof(server_addr))) == -1) && (abstime.tv_sec - trytime) > 0){
+        if (connectionflag == -1){
+            sleep(sleeptime); 
+            trytime = trytime + sleeptime;
+        }
+    }
+    if(connectionflag == -1){
+        return -1;
+    }
+    return 0;
+}
 
 /*Chiude la connessione AF_UNIX associata al socket file sockname. Ritorna 0 in caso di successo, -1 in caso di
 fallimento, errno viene settato opportunamente.*/
-int closeConnection(const char* sockname);
+int closeConnection(const char* sockname){
+    return close(cfd_socket);
+}
 
 /*Richiesta di apertura o di creazione di un file. La semantica della openFile dipende dai flags passati come secondo
 argomento che possono essere O_CREATE ed O_LOCK. Se viene passato il flag O_CREATE ed il file esiste già
@@ -54,7 +76,25 @@ aperto e/o creato in modalità locked, che vuol dire che l’unico che può legg
 processo che lo ha aperto. Il flag O_LOCK può essere esplicitamente resettato utilizzando la chiamata unlockFile,
 descritta di seguito.
 Ritorna 0 in caso di successo, -1 in caso di fallimento, errno viene settato opportunamente.*/
-int openFile(const char* pathname, int flags);
+int openFile(const char* pathname, int flags){
+    if(hashtable == NULL) hashtable = HASHTABLE_INIT(NUMBUCKETS);
+    if(flags == 0x01){
+        if(hashtableFind(hashtable, pathname) == 0){
+            /*file NON presente*/
+            mode_t oldmask = umask(033);
+            FILE *file;
+            // creo il file con diritti 0644
+            if ((file = fopen(pathname, "w+")) == NULL) { 
+                return -1;
+            }
+            umask(oldmask);
+            Data_t* data = dataInit(file, cfd_socket);
+            hashtableInsert(hashtable, (void*)pathname, sizeof(pathname), (void*)data, sizeof(data));
+            return 0;
+        }
+    }
+    return -1;
+}
 
 /*Legge tutto il contenuto del file dal server (se esiste) ritornando un puntatore ad un'area allocata sullo heap nel
 parametro ‘buf’, mentre ‘size’ conterrà la dimensione del buffer dati (ossia la dimensione in bytes del file letto). In

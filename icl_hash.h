@@ -1,31 +1,45 @@
-#ifndef ICL_HASH_H_
-#define ICL_HASH_H_
+#ifndef ICL_HASH_H
+#define ICL_HASH_H
 
-#include<stdio.h>
 #include<stdlib.h>
-#include<assert.h>
-#include<malloc.h>
-#include "queue.h"
+#include<stdio.h>
 
-typedef struct HashTable{
-    int size;
-    Queue_t* buckets;
-}HashTable_t;
+#define HASHTABLE_INIT(numbuckets) hashtableInit(numbuckets, NULL, NULL)
 
-typedef size_t (*hashFunction)(HashTable*, int);
+typedef struct Node{
+	void* key;
+	void* data;
+	size_t datasize;
+	struct Node* next;
+}Node_t;
 
-size_t hash(HashTable_t* hashtable, int key);
+typedef struct Hashtable{
+	size_t numbuckets;
+	Node_t** buckets; 
+	int (*hashFunction) (const void*);
+	int (*hashCompare) (const void*, const void*);
+}Hashtable_t;
 
-HashTable_t* HashTable_create(size_t size, hashFunction hash);
+unsigned int hashFunction(const void*);
 
-void HashTable_free(HashTable** hashtablePtr);
+int hashCompare(const void*, const void*);
 
-void HashTable_insert(HashTable* hashtable, int value);
+Node_t* createNode(const void*, size_t, const void*, size_t);
 
-void HashTable_delete(HashTable* hashtable, int value);
+void printNode(const Node_t*);
 
-int HashTable_get(HashTable* hashtable, int value);
+Hashtable_t* hashtableInit(size_t, size_t (*hash_function) (const void*), int (*hash_compare) (const void*, const void*));
 
-void HashTable_print(HashTable* hashtable);
+int hashtableInsert(Hashtable_t*, const void*, size_t, const void*, size_t);
+
+void* hashtableGetEntry(const Hashtable_t*, const void*);
+
+int hashtableFind(const Hashtable_t*, const void*);
+
+int hashtableDeleteNode(Hashtable_t*, const void*);
+
+void hashtableFree(Hashtable_t*);
+
+void hashtablePrint(const Hashtable_t*);
 
 #endif

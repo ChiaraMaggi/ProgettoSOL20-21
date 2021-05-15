@@ -1,62 +1,186 @@
-#include<stdio.h>
+#include<errno.h>
 #include<stdlib.h>
+#include<stdio.h>
+#include<string.h>
 #include<assert.h>
-#include<malloc.h>
-#include "queue.h"
+#include <limits.h>
 
-typedef struct HashTable{
-    size_t size;
-    Queue_t* buckets;
-    size_t (*hash)(struct HashTable_t*, int);
-}HashTable_t;
+#include "icl_hash.h"
 
-typedef size_t (*hashFunction_t)(HashTable_t*, int);
+#define BITS_IN_int     ( sizeof(int) * CHAR_BIT )
+#define THREE_QUARTERS  ((int) ((BITS_IN_int * 3) / 4))
+#define ONE_EIGHTH      ((int) (BITS_IN_int / 8))
+#define HIGH_BITS       ( ~((unsigned int)(~0) >> ONE_EIGHTH ))
 
-size_t hash(HashTable_t* hashtable, int key) {
-    return (key % 100002271) % hashtable->size;
-}
-
-HashTable_t* initHashTable(size_t size, hashFunction_t hash) {
-    HashTable_t* hashtable = malloc(sizeof(*hashtable));
-    assert(hashtable);
-
-    hashtable->size = size;
-    hashtable->hash = hash;
-
-    hashtable->buckets = malloc(size * sizeof(*(hashtable->buckets)));
-    assert(hashtable->buckets);
-
-    for (size_t i = 0; i < size; i++) {
-        hashtable->buckets[i] = *initQueue();
+unsigned int hashFunction(const void* key){
+    char *datum = (char*)key;
+    unsigned int hashvalue, i;
+    if(!datum) return 0;
+    for (hashvalue = 0; *datum; ++datum) {
+        hashvalue = (hashvalue << ONE_EIGHTH) + *datum;
+        if ((i = hashvalue & HIGH_BITS) != 0)
+            hashvalue = (hashvalue ^ (i >> THREE_QUARTERS)) & ~HIGH_BITS;
     }
-    return hashtable;
+    return (hashvalue);
 }
 
-void freeHashTable(HashTable_t** hashtablePtr) {
-    for (size_t i = 0; i < (*hashtablePtr)->size; i++) {
-        deleteQueue(&((*hashtablePtr)->buckets[i]));
-    }
-    free((*hashtablePtr)->buckets);
-    free((*hashtablePtr));
-    *hashtablePtr = NULL;
+
+int hashCompare(const void* a, const void* b){
+	return strcmp((char*) a, (char*) b);
 }
 
-void insertHashTable(HashTable_t* hashtable, int value) {
-    size_t h = hashtable->hash(hashtable, value);
-    //finire
+
+Node_t* createNode(const void* key, size_t keysize, const void* data, size_t datasize){
+	Node_t* node;
+	node = (Node_t*)malloc(sizeof(Node_t));
+	node->key = malloc(keysize);
+	if (data != NULL && datasize > 0){
+		node->data = malloc(datasize);
+		memcpy(node->data, data, datasize);
+		node->datasize = datasize;
+	}else{
+		node->data = NULL;
+		node->datasize = 0;
+	}
+	memcpy(node->key, key, keysize);
+	node->next = NULL;
+	return node;
 }
 
-void deleteHashTable(HashTable_t* hashtable, int value) {
-    size_t h = hashtable->hash(hashtable, value);
 
-    int index = List_findElement(hashtable->buckets[h], value);
-    if (index == -1) {
-        List_deleteByIndex(hashtable->buckets[h], index);
-    }
+void printNode(const Node_t* node){
+	if (node == NULL) fprintf(stdout, "NULL\n");
+	else{
+		fprintf(stdout, "[%s ; %s] -> ", (char*) node->key, (char*) node->data);
+		printNode(node->next);
+	}
 }
 
-void HashTable_print(HashTable_t* hashtable) {
-    for (size_t i = 0; i < hashtable->size; i++) {
-        List_print(hashtable->buckets[i]);
-    }
+
+Hashtable_t* hashtableInit(size_t numbuckets, size_t (*hash_function) (const void*), int (*hash_compare) (const void*, const void*)){
+	Hashtable_t* hashtable;
+	hashtable = (Hashtable_t*) malloc(sizeof(Hashtable_t));
+	hashtable->numbuckets = numbuckets;
+	hashtable->buckets = (Node_t**)malloc(sizeof(Node_t*) * numbuckets);
+	if (hashtable->buckets == NULL){
+		perror("malloc");
+		return NULL;
+	}
+	for (size_t i = 0; i < numbuckets; i++) hashtable->buckets[i] = NULL;
+	hashtable->hashFunction = ((hash_function == NULL) ? ((const void*)hashFunction) : (hash_function));
+	hashtable->hashCompare = ((hash_compare == NULL) ? (hashCompare) : (hash_compare));
+	return hashtable;
 }
+
+
+int hashtableInsert(Hashtable_t* hashtable, const void* key, size_t keysize, const void* data, size_t datasize){
+	if (key == NULL || keysize == 0) return -1;
+	size_t hash = hashtable->hashFunction(key) % hashtable->numbuckets;
+	for (Node_t* curr = hashtable->buckets[hash]; curr != NULL; curr = curr->next){
+		if (hashtable->hashCompare(curr->key, key) == 0) // duplicates are not allowed
+			return 0;
+	}
+	Node_t* node;
+	node = createNode(key, keysize, data, datasize);
+	if (node == NULL){
+		errno = ENOMEM;
+		return -1;
+	}
+	node->next = hashtable->buckets[hash];
+	hashtable->buckets[hash] = node;
+	return 0;
+}
+
+void* hashtableGetNode(const Hashtable_t* hashtable, const void* key){
+	if (hashtable == NULL) return NULL;
+	size_t hash = hashtable->hashFunction(key) % hashtable->numbuckets;
+	Node_t* node = hashtable->buckets[hash];
+	while (node != NULL){
+		if (hashtable->hashCompare(node->key, key) == 0){
+			void* data = malloc(sizeof(node->datasize));
+			if (data == NULL){
+				errno = ENOMEM;
+				return NULL;
+			}
+			memcpy(data, node->data, node->datasize);
+			return data;
+		}
+		node = node->next;
+	}
+	return NULL;
+}
+
+int hashtableFind(const Hashtable_t* hashtable, const void* key){
+	if (hashtable == NULL) return 0;
+	size_t hash = hashtable->hashFunction(key) % hashtable->numbuckets;
+	Node_t* node = hashtable->buckets[hash];
+	while (node != NULL)
+{
+		if (hashtable->hashCompare(node->key, key) == 0) return 1;
+		node = node->next;
+	}
+	return 0;
+}
+
+int hashtableDeleteNode(Hashtable_t* hashtable, const void* key){
+	if (hashtableFind(hashtable, key) == 0) return 0; // nothing to delete
+	size_t hash = hashtable->hashFunction(key) % hashtable->numbuckets;
+	Node_t* curr = hashtable->buckets[hash];
+	Node_t* prec = NULL;
+	while(curr != NULL){
+		// this node is the one to be deleted
+		if (hashtable->hashCompare(curr->key, key) == 0){
+			if (prec == NULL){ // curr is the first node
+				hashtable->buckets[hash] = curr->next;
+				free(curr->key);
+				if (curr->data != NULL) free(curr->data);
+				free(curr);
+				return 1;
+			}
+			if (curr->next == NULL){ // curr is the last node
+				prec->next = NULL;
+				free(curr->key);
+				if (curr->data != NULL) free(curr->data);
+				free(curr);
+				return 1;
+			}
+			prec->next = curr->next;
+			free(curr->key);
+			if (curr->data != NULL) free(curr->data);
+			free(curr);
+			return 1;
+		}
+		prec = curr;
+		curr = curr->next;
+	}
+	return 0;
+}
+
+void hashtableFree(Hashtable_t* hashtable){
+	if (hashtable == NULL) return;
+	for (size_t i = 0; i < hashtable->numbuckets; i++){
+		Node_t* curr = hashtable->buckets[i];
+		Node_t* tmp;
+		while (curr != NULL){
+			tmp = curr;
+			curr = curr->next;
+			free(tmp->key);
+			if (tmp->data != NULL) free(tmp->data);
+			free(tmp);
+		}
+	}
+	free(hashtable->buckets);
+	free(hashtable);
+}
+
+void hashtablePrint(const Hashtable_t* hashtable){
+	if (hashtable == NULL) return;
+	fprintf(stdout, "buckets = %lu\n", hashtable->numbuckets);
+	for (size_t i = 0; i < hashtable->numbuckets; i++){
+		fprintf(stdout, "%lu: ", i);
+		printNode(hashtable->buckets[i]);
+	}
+	return;
+}
+
+	

@@ -11,7 +11,7 @@
 
 #include<stdio.h>
 
-//int openConnection(const char* sockname, int msec, const struct timespec abstime);
+int openConnection(const char* sockname, int msec, const struct timespec abstime);
 
 int closeConnection(const char* sockname);
 
