@@ -7,6 +7,8 @@
 #include<errno.h>
 #include<string.h>
 #include<pthread.h>
+#include<unistd.h>
+#include<sys/types.h>
 
 #define UNIX_PATH_MAX 108
 #define SOMAXCON 100
@@ -68,10 +70,17 @@
     fprintf(stderr, "FATAL ERROR broadcast\n"); \
     pthread_exit((void*)EXIT_FAILURE); \
   }
+
+
 /** 
  * @brief Controlla se la stringa passata come primo argomento e' un numero.
  * @return  0 ok  1 non e' un numbero   2 overflow/underflow
  */
-int isNumber(const char* s, long* n);
+int isNumber(const char*, long*);
+
+ssize_t readn(int fd, void *ptr, size_t n);
+
+ssize_t writen(int fd, void *ptr, size_t n);
+
 
 #endif /* _UTIL_H */

@@ -25,11 +25,28 @@
 #include "icl_hash.h"
 
 #define SOCKETNAME "SOLsocket.sk"
-#define O_CREATE 0x01
-#define O_LOCK 0x10
+#define O_CREATE 01
+#define O_LOCK 10
 
-int main(void){
-    
+int main(int argc, char* argv[]){
+    /*int opt; 
+    while((opt = getopt(argc, argv, ":n:m:o:h")) != -1){ //opstring contine le opzioni che vogliamo gestire
+        //se getop trova una delle opzioni ritrona un intero (relativo al carattere letto) quindi posso fare lo switch
+        switch(opt){
+            case 'n':arg_n(optarg); break; //optarg = variabile che setta getopt all'argomento dell'opzione
+            case 'm':arg_m(optarg); break;
+            case 'o':arg_o(optarg); break;
+            case 'h':arg_h(argv[0]); break; //non ho nessun argomento, mi interessa passare il nome del programma
+            case ':': { //quando l'operazione da eseguire appartiene a quelle da poter eseguire ma manca l'argomento
+                printf("L'opzione '-%c' richiede un argomento\n", optopt); //= variabile interna di getopt che contiene le operazioni che non sono gestite
+            }
+            case '?':{ //getopt ritrona ? quando l'operazione da eseguire non appartiene alla opstring
+                printf("L'opzione '-%c' non e' gestita\n", optopt); 
+            } break;
+            default:;
+        }
+    }
+    */
     struct timespec abstime;
     clock_gettime(CLOCK_REALTIME, &abstime);
     abstime.tv_sec += 5;
@@ -37,11 +54,8 @@ int main(void){
         perror("opening connection");
         return (EXIT_FAILURE);
     }
-    sleep(1);
-    if(openFile("ciao.txt", O_CREATE) == -1){
-        perror("operning file");
-        return (EXIT_FAILURE);
-    }
+
+    openFile("home/chiara/ciao.txt", O_CREATE);
 
     if(closeConnection(SOCKETNAME) == -1){
         perror("closing connection");

@@ -10,6 +10,15 @@
 #define API_H_
 
 #include<stdio.h>
+#include<stdlib.h>
+
+typedef enum {OPEN, OPENC, CLOSECONN, READ}type_t;
+
+typedef struct request{
+    type_t request;
+    char pathname[100];
+    int len;
+}request_t;
 
 int openConnection(const char* sockname, int msec, const struct timespec abstime);
 
@@ -17,6 +26,7 @@ int closeConnection(const char* sockname);
 
 int openFile(const char* pathname, int flags);
 
+/*
 int readFile(const char* pathname, void** buf, size_t* size);
 
 int writeFile(const char* pathname, const char* dirname);
@@ -30,5 +40,5 @@ int unlockFile(const char* pathname);
 int closeFile(const char* pathname);
 
 int removeFile(const char* pathname);
-
+*/
 #endif
