@@ -12,7 +12,7 @@
 #include<stdio.h>
 #include<stdlib.h>
 
-typedef enum {OPEN, OPENC, CLOSECONN, READ}type_t;
+typedef enum {OPEN, OPENC, CLOSECONN, READ, APPEND, APPENDDIR, CLOSE}type_t;
 
 typedef struct request{
     type_t request;
@@ -26,8 +26,8 @@ int closeConnection(const char* sockname);
 
 int openFile(const char* pathname, int flags);
 
-/*
 int readFile(const char* pathname, void** buf, size_t* size);
+/*
 
 int writeFile(const char* pathname, const char* dirname);
 

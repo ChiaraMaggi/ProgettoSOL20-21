@@ -31,6 +31,13 @@
 
 Hashtable_t* hashtable = NULL;
 
+typedef struct File{
+    int fdcreator;
+    char* pathname;
+    void* buf;
+    int size;
+}File_t;
+
 typedef struct server_state
 {
    int num_file;
@@ -100,6 +107,7 @@ int main(int argc, char* argv[]){
 		CHECK_EQ_EXIT(fd_client = accept(fd_server, NULL, 0), -1, "accept");
 		fprintf(stdout, "SERVER: new client accepted %d\n", fd_client);
 
+        
         type_t req;
         readn(fd_client, &req, sizeof(req));
         if(req == OPENC){
@@ -111,9 +119,31 @@ int main(int argc, char* argv[]){
             path = malloc(len * sizeof(char));
             readn(fd_client, path, len);
             printf("%s\n", path);
+            int answer = 1;
+            writen(fd_client, &answer, sizeof(answer));
         }
-        int answer = 1;
-        writen(fd_client, &answer, sizeof(answer));
+
+        if(req == READ){
+            printf("corretto\n");
+            int len;
+            char* path;
+            readn(fd_client, &len, sizeof(int));
+            printf("%d\n", len);
+            path = malloc(len * sizeof(char));
+            readn(fd_client, path, len);
+            printf("%s\n", path);
+            char* buf = "dio can";
+            int answer = strlen(buf);
+            writen(fd_client, &answer, sizeof(int));
+            writen(fd_client, buf, sizeof(buf));
+        }
+
+        if(req == CLOSECONN){
+            printf("chiusura\n");
+            int answer = 1;
+            writen(fd_client, &answer, sizeof(answer));
+            close(fd_client);
+        }
 
 	}
 	CHECK_EQ_EXIT(close(fd_server), -1, "close");

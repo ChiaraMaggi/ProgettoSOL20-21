@@ -55,17 +55,16 @@ int main(int argc, char* argv[]){
         return (EXIT_FAILURE);
     }
 
-    openFile("home/chiara/ciao.txt", O_CREATE);
+    //openFile("dioboia/ciao.c", O_CREATE);
 
-    if(closeConnection(SOCKETNAME) == -1){
+    /*void** buf = malloc(sizeof(buf));
+    size_t size;
+    readFile("home/chiara/ciao.txt", buf, &size);
+    printf("%s\n", (char*)*buf);
+*/
+    if(closeConnection("ciao") == -1){
         perror("closing connection");
         return (EXIT_FAILURE);
     }
-    /*char buf[100];
-    int N = 100;
-    CHECK_EQ_EXIT(write(sockfd, "Hello!", 7), -1, "write");
-    CHECK_EQ_EXIT(read(sockfd, buf, N), -1, "read");
-    printf("Client got: %s\n",buf) ;
-    close(sockfd);*/
     exit(EXIT_SUCCESS); 
 }

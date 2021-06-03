@@ -78,7 +78,10 @@ int closeConnection(const char* sockname){
     if(strncmp(server_address.sun_path, sockname, strlen(sockname)+1) ==  0){
     	type_t request = CLOSECONN;
         CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen", -1);
-    	CHECK_EQ_RETURN((readn(fd_socket, &request, sizeof(type_t))), -1, "readn", -1);
+        int answer = -1;
+    	CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn", -1);
+        if(answer == -1)
+            return -1;
         return close(fd_socket);
     }else{
         errno = EFAULT; //connessione inesistente
@@ -111,7 +114,7 @@ int openFile(const char* pathname, int flags){
         request = OPENC;
     
     int len = strlen(pathname);
-    CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(int))), -1, "writen", -1);    
+    CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen", -1);    
     CHECK_EQ_RETURN((writen(fd_socket, &len, sizeof(int))), -1, "writen", -1);
     CHECK_EQ_RETURN((writen(fd_socket, pathname, len*sizeof(char))), -1, "writen", -1);
 
@@ -139,27 +142,67 @@ int readFile(const char* pathname, void** buf, size_t* size){
     }
     type_t request = READ;
     int len = strlen(pathname);
-    CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(int))), -1, "writen", -1);    
-    CHECK_EQ_RETURN((writen(fd_socket, &len, sizeof(int))), -1, "writen", -1);
-    CHECK_EQ_RETURN((writen(fd_socket, pathname, len*sizeof(char))), -1, "writen", -1);
+    CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen readFile", -1);    
+    CHECK_EQ_RETURN((writen(fd_socket, &len, sizeof(int))), -1, "writen readFile", -1);
+    CHECK_EQ_RETURN((writen(fd_socket, pathname, len*sizeof(char))), -1, "writen readFile", -1);
 
-    char* answer;
-    CHECK_EQ_RETURN((readn(fd_socket, answer, sizeof(answer))), -1, "readn", -1);
-
-
+    int answer = -1;
+    CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn readFile", -1);
+    printf("%d\n", answer);
+    if(answer == -1){
+        errno = ECANCELED;
+        return -1;
+    }
+    *buf = malloc(answer);
+    CHECK_EQ_RETURN((readn(fd_socket, *buf, sizeof(buf))), -1, "readn readFile", -1);
+    *size = answer;
+    return 0;
 }
 
 /*Scrive tutto il file puntato da pathname nel file server. Ritorna successo solo se la precedente operazione,
 terminata con successo, è stata openFile(pathname, O_CREATE| O_LOCK). Se ‘dirname’ è diverso da NULL, il
 file eventualmente spedito dal server perchè espulso dalla cache per far posto al file ‘pathname’ dovrà essere
 scritto in ‘dirname’; Ritorna 0 in caso di successo, -1 in caso di fallimento, errno viene settato opportunamente.*/
-//int writeFile(const char* pathname, const char* dirname);
+int writeFile(const char* pathname, const char* dirname){
+    return 0;
+}
 
 /*Richiesta di scrivere in append al file ‘pathname‘ i ‘size‘ bytes contenuti nel buffer ‘buf’. L’operazione di append
 nel file è garantita essere atomica dal file server. Se ‘dirname’ è diverso da NULL, il file eventualmente spedito
 dal server perchè espulso dalla cache per far posto ai nuovi dati di ‘pathname’ dovrà essere scritto in ‘dirname’;
 Ritorna 0 in caso di successo, -1 in caso di fallimento, errno viene settato opportunamente.*/
-//int appendToFile(const char* pathname, void* buf, size_t size, const char* dirname);
+int appendToFile(const char* pathname, void* buf, size_t size, const char* dirname){
+    if(!pathname){
+        errno = EINVAL;
+        return -1;
+    }
+    if(connectionOn != 1){
+        errno = ENOTCONN;
+        return -1;
+    }
+    type_t request;
+    if(dirname == NULL) request = APPEND;  
+    else request = APPENDDIR;
+    int len = strlen(pathname);
+    CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen appendFile", -1);    
+    CHECK_EQ_RETURN((writen(fd_socket, &len, sizeof(int))), -1, "writen appendFile", -1);
+    CHECK_EQ_RETURN((writen(fd_socket, pathname, len*sizeof(char))), -1, "writen appendFile", -1);
+    CHECK_EQ_RETURN((writen(fd_socket, &size, sizeof(size_t))), -1, "writen appendFile", -1);    
+    CHECK_EQ_RETURN((writen(fd_socket, buf, sizeof(buf))), -1, "writen appenadFile", -1);
+    int answer = -1;
+    CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn readFile", -1);  
+    if(answer == -1){
+        errno = ECANCELED;
+        return -1;
+    }
+    if(request == APPEND){
+        return 0;
+    }
+    if(request == APPENDDIR){
+    //????
+    }
+    return 0;
+}
 
 /*In caso di successo setta il flag O_LOCK al file. Se il file era stato aperto/creato con il flag O_LOCK e la
 richiesta proviene dallo stesso processo, oppure se il file non ha il flag O_LOCK settato, l’operazione termina
@@ -175,7 +218,29 @@ fallimento, errno viene settato opportunamente.*/
 
 /*Richiesta di chiusura del file puntato da ‘pathname’. Eventuali operazioni sul file dopo la closeFile falliscono.
 Ritorna 0 in caso di successo, -1 in caso di fallimento, errno viene settato opportunamente.*/
-//int closeFile(const char* pathname);
+int closeFile(const char* pathname){
+    if(!pathname){
+        errno = EINVAL;
+        return -1;
+    }
+    if(connectionOn != 1){
+        errno = ENOTCONN;
+        return -1;
+    }
+    type_t request = CLOSE;
+    int len = strlen(pathname);
+    CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen closeFile", -1);    
+    CHECK_EQ_RETURN((writen(fd_socket, &len, sizeof(int))), -1, "writen closeFIle", -1);
+    CHECK_EQ_RETURN((writen(fd_socket, pathname, len*sizeof(char))), -1, "writen closeFile", -1);
+
+    int answer = -1;
+    CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn closeFile", -1);
+    if(answer == -1){
+        errno = ECANCELED;
+        return -1;
+    }
+    return 0;
+}
 
 /*Rimuove il file cancellandolo dal file storage server. L’operazione fallisce se il file non è in stato locked, o è in
 stato locked da parte di un processo client diverso da chi effettua la removeFile.*/
