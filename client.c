@@ -24,21 +24,61 @@
 #include "api.h"
 #include "icl_hash.h"
 
-#define SOCKETNAME "SOLsocket.sk"
 #define O_CREATE 01
 #define O_LOCK 10
 
+void connection(char* socketname){
+    struct timespec abstime;
+    clock_gettime(CLOCK_REALTIME, &abstime);
+    abstime.tv_sec += 5;
+    if(openConnection(socketname, 2000, abstime) == -1) perror("opening connection");
+}
+
 int main(int argc, char* argv[]){
-    /*int opt; 
-    while((opt = getopt(argc, argv, ":n:m:o:h")) != -1){ //opstring contine le opzioni che vogliamo gestire
+    int opt; 
+    void** buf = malloc(sizeof(buf));
+    size_t size;
+    while((opt = getopt(argc, argv, ":hf:w:W:r:R:d:t:l:u:c:p")) != -1){ //opstring contine le opzioni che vogliamo gestire
         //se getop trova una delle opzioni ritrona un intero (relativo al carattere letto) quindi posso fare lo switch
         switch(opt){
-            case 'n':arg_n(optarg); break; //optarg = variabile che setta getopt all'argomento dell'opzione
-            case 'm':arg_m(optarg); break;
-            case 'o':arg_o(optarg); break;
-            case 'h':arg_h(argv[0]); break; //non ho nessun argomento, mi interessa passare il nome del programma
-            case ':': { //quando l'operazione da eseguire appartiene a quelle da poter eseguire ma manca l'argomento
-                printf("L'opzione '-%c' richiede un argomento\n", optopt); //= variabile interna di getopt che contiene le operazioni che non sono gestite
+            case 'h':
+                printf("-f filename\n-w dirname[,n=0]\n-W file1[,file2]\n-r file1[,file2]\n-R [n=0]\n-d dirname\n-t time\n-l file1[,file2]\n-u file1[,file2]\n-c file1[,file2]\n-p\n");
+                break; //optarg = variabile che setta getopt all'argomento dell'opzione
+            case 'f':
+                connection(optarg);
+                break;
+            case 'w':
+                openFile("boia/ciao.c", O_CREATE);
+                break;
+            case 'W':
+                readFile("home/chiara/ciao.txt", buf, &size);
+                printf("%s\n", (char*)*buf);
+                break; 
+            case 'r':
+                break;
+            case 'R':
+                break;
+            case 'd':
+                break;
+            case 't':
+                break;
+            case 'l':   
+                break;
+            case 'u':
+                break;
+            case 'c':
+                break;
+            case 'p':
+                break;
+            case ':': {//quando l'operazione da eseguire appartiene a quelle da poter eseguire ma manca l'argomento
+                switch(optopt){ //optopt variabile interna di getopt che contiene le operazioni che non sono gestite
+                    case 'R':
+                        break;
+                    case 't':
+                        break;
+                    default:
+                        printf("L'opzione '-%c' richiede un argomento\n", optopt); 
+                }
             }
             case '?':{ //getopt ritrona ? quando l'operazione da eseguire non appartiene alla opstring
                 printf("L'opzione '-%c' non e' gestita\n", optopt); 
@@ -46,25 +86,10 @@ int main(int argc, char* argv[]){
             default:;
         }
     }
-    */
-    struct timespec abstime;
-    clock_gettime(CLOCK_REALTIME, &abstime);
-    abstime.tv_sec += 5;
-    if(openConnection(SOCKETNAME, 2000, abstime) == -1){
-        perror("opening connection");
-        return (EXIT_FAILURE);
-    }
-
-    //openFile("dioboia/ciao.c", O_CREATE);
-
-    /*void** buf = malloc(sizeof(buf));
-    size_t size;
-    readFile("home/chiara/ciao.txt", buf, &size);
-    printf("%s\n", (char*)*buf);
-*/
-    if(closeConnection("ciao") == -1){
+    sleep(15);
+    if(closeConnection("SOLsocket.sk") == -1){
         perror("closing connection");
         return (EXIT_FAILURE);
     }
-    exit(EXIT_SUCCESS); 
+    return 0;
 }

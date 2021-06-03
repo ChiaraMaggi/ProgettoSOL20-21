@@ -28,7 +28,7 @@ int isNumber(const char* s, long* n) {
  *   \retval size se termina con successo
  */
 /* Read "n" bytes from a descriptor */
-ssize_t readn(int fd, void *ptr, size_t n) {  
+ssize_t readn(int fd, void* ptr, size_t n) {  
   size_t   nleft;
   ssize_t  nread;
 
@@ -52,7 +52,7 @@ ssize_t readn(int fd, void *ptr, size_t n) {
  *   \retval  1   se la scrittura termina con successo
  */
 /* Write "n" bytes to a descriptor */
-ssize_t writen(int fd, void *ptr, size_t n) {  
+ssize_t writen(int fd, const void* ptr, size_t n) {  
   size_t   nleft;
   ssize_t  nwritten;
 

@@ -14,7 +14,7 @@ OBJ1 = server.o
 OBJ2 = client.o
 
 # file oggetto della libreria
-LIB_OBJ = parsing.o utils.o data.o queue.o api.o icl_hash.o
+LIB_OBJ = parsing.o utils.o queue.o api.o icl_hash.o
 
 # questo non serve ma è buona norma
 TARGET = server client libfunzioni.a
@@ -38,9 +38,6 @@ parsing.o: parsing.h parsing.c
 
 utils.o: utils.h utils.c
 	$(CC) $(CFLAGS) utils.c -o utils.o
-
-data.o: data.h data.c
-	$(CC) $(CFLAGS) data.c -o data.o
 
 queue.o: queue.h queue.c
 	$(CC) $(CFLAGS) queue.c -o queue.o

@@ -54,14 +54,13 @@ int openConnection(const char* sockname, int msec, const struct timespec abstime
 
     /*gestico la situzione in cui il client faccia richesta al server che non è stato ancora svegliato*/
     while (((connectionflag = connect(fd_socket,(struct sockaddr*)&server_address, sizeof(server_address))) == -1) && (abstime.tv_sec - trytime) > 0){
-        if(errno == ENOENT){
-            if (connectionflag == -1){
-                sleep(sleeptime); 
-                trytime = trytime + sleeptime;
-            }
+        if (connectionflag == -1){
+            sleep(sleeptime); 
+            trytime = trytime + sleeptime;
         }
     }
     if(connectionflag == -1){
+        errno = ECONNREFUSED;
         return -1;
     }
     connectionOn = 1; //connesione attiva
@@ -77,11 +76,13 @@ int closeConnection(const char* sockname){
     }
     if(strncmp(server_address.sun_path, sockname, strlen(sockname)+1) ==  0){
     	type_t request = CLOSECONN;
-        CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen", -1);
+        CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen closeConnection", -1);
         int answer = -1;
-    	CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn", -1);
-        if(answer == -1)
+    	CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn closeConnection", -1);
+        if(answer == -1){
+            errno = ECANCELED;
             return -1;
+        }
         return close(fd_socket);
     }else{
         errno = EFAULT; //connessione inesistente
@@ -108,18 +109,18 @@ int openFile(const char* pathname, int flags){
         return -1;
     }
     type_t request;
-    if(flags == 0)
+    if(flags == 00)
         request = OPEN;
     if(flags == 01)
         request = OPENC;
     
     int len = strlen(pathname);
-    CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen", -1);    
-    CHECK_EQ_RETURN((writen(fd_socket, &len, sizeof(int))), -1, "writen", -1);
-    CHECK_EQ_RETURN((writen(fd_socket, pathname, len*sizeof(char))), -1, "writen", -1);
+    CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen openFile", -1);    
+    CHECK_EQ_RETURN((writen(fd_socket, &len, sizeof(int))), -1, "writen openFile", -1);
+    CHECK_EQ_RETURN((writen(fd_socket, pathname, len*sizeof(char))), -1, "writen openFile", -1);
 
     int answer = -1;  //risposta server
-    CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn", -1);
+    CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn openFile", -1);
 	if(answer == -1){
 		errno = ECANCELED;
 		return -1;
@@ -159,12 +160,22 @@ int readFile(const char* pathname, void** buf, size_t* size){
     return 0;
 }
 
+/*Richiede al server la lettura di ‘N’ files qualsiasi da memorizzare nella directory ‘dirname’ lato 
+client. Se il server ha meno di ‘N’ file disponibili, li invia tutti. Se N<=0 la richiesta al server è 
+quella di leggere tutti i file memorizzati al suo interno. Ritorna un valore maggiore o uguale a 0 in
+caso di successo (cioè ritorna il n. di file effettivamente letti), -1 in caso di fallimento, errno viene 
+settato opportunamente.*/
+//int readNFiles(int N, const char* dirname)
+
+
+
 /*Scrive tutto il file puntato da pathname nel file server. Ritorna successo solo se la precedente operazione,
 terminata con successo, è stata openFile(pathname, O_CREATE| O_LOCK). Se ‘dirname’ è diverso da NULL, il
 file eventualmente spedito dal server perchè espulso dalla cache per far posto al file ‘pathname’ dovrà essere
 scritto in ‘dirname’; Ritorna 0 in caso di successo, -1 in caso di fallimento, errno viene settato opportunamente.*/
 int writeFile(const char* pathname, const char* dirname){
-    return 0;
+    errno = ENOTSUP;
+    return -1;
 }
 
 /*Richiesta di scrivere in append al file ‘pathname‘ i ‘size‘ bytes contenuti nel buffer ‘buf’. L’operazione di append
@@ -183,6 +194,10 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
     type_t request;
     if(dirname == NULL) request = APPEND;  
     else request = APPENDDIR;
+    if(request == APPENDDIR){
+        errno = ENOTSUP;
+        return -1;
+    }
     int len = strlen(pathname);
     CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen appendFile", -1);    
     CHECK_EQ_RETURN((writen(fd_socket, &len, sizeof(int))), -1, "writen appendFile", -1);
@@ -194,12 +209,6 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
     if(answer == -1){
         errno = ECANCELED;
         return -1;
-    }
-    if(request == APPEND){
-        return 0;
-    }
-    if(request == APPENDDIR){
-    //????
     }
     return 0;
 }
@@ -244,4 +253,7 @@ int closeFile(const char* pathname){
 
 /*Rimuove il file cancellandolo dal file storage server. L’operazione fallisce se il file non è in stato locked, o è in
 stato locked da parte di un processo client diverso da chi effettua la removeFile.*/
-//int removeFile(const char* pathname);
+int removeFile(const char* pathname){
+    errno = ENOTSUP;
+    return -1;
+}

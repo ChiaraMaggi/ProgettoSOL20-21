@@ -33,6 +33,7 @@ Hashtable_t* hashtable = NULL;
 
 typedef struct File{
     int fdcreator;
+    int openby[100];
     char* pathname;
     void* buf;
     int size;
@@ -132,7 +133,7 @@ int main(int argc, char* argv[]){
             path = malloc(len * sizeof(char));
             readn(fd_client, path, len);
             printf("%s\n", path);
-            char* buf = "dio can";
+            char* buf = "deh";
             int answer = strlen(buf);
             writen(fd_client, &answer, sizeof(int));
             writen(fd_client, buf, sizeof(buf));
