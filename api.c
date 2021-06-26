@@ -29,6 +29,7 @@ static int fd_socket = 0;
 struct sockaddr_un server_address;
 static int connectionOn = 0;
 
+typedef enum {OPEN, OPENC, CLOSECONN, WRITE, APPEND, READ, CLOSE}type_t;
 
 /*Viene aperta una connessione AF_UNIX al socket file sockname. Se il server non accetta immediatamente la
 richiesta di connessione, la connessione da parte del client viene ripetuta dopo ‘msec’ millisecondi e fino allo
@@ -40,6 +41,7 @@ int openConnection(const char* sockname, int msec, const struct timespec abstime
         return -1;
     }
 
+    printf("trying connection\n");
     CHECK_EQ_EXIT((fd_socket=socket(AF_UNIX,SOCK_STREAM,0)), -1, "socket");
 
     /*settaggio della struttura*/
@@ -64,6 +66,7 @@ int openConnection(const char* sockname, int msec, const struct timespec abstime
         return -1;
     }
     connectionOn = 1; //connesione attiva
+    printf("connected\n");
     return 0;
 }
 
@@ -71,12 +74,13 @@ int openConnection(const char* sockname, int msec, const struct timespec abstime
 fallimento, errno viene settato opportunamente.*/
 int closeConnection(const char* sockname){
     if(!sockname){
-        errno = EINVAL; //valore non validp
+        errno = EINVAL; //valore non valido
         return -1;
     }
     if(strncmp(server_address.sun_path, sockname, strlen(sockname)+1) ==  0){
-    	type_t request = CLOSECONN;
-        CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen closeConnection", -1);
+        type_t request = CLOSECONN;
+        CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(size_t))), -1, "writen closeConnection", -1);
+    
         int answer = -1;
     	CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn closeConnection", -1);
         if(answer == -1){
@@ -88,6 +92,7 @@ int closeConnection(const char* sockname){
         errno = EFAULT; //connessione inesistente
         return -1;
     }
+    return 0;
 }
 
 /*Richiesta di apertura o di creazione di un file. La semantica della openFile dipende dai flags passati come secondo
@@ -174,8 +179,51 @@ terminata con successo, è stata openFile(pathname, O_CREATE| O_LOCK). Se ‘dir
 file eventualmente spedito dal server perchè espulso dalla cache per far posto al file ‘pathname’ dovrà essere
 scritto in ‘dirname’; Ritorna 0 in caso di successo, -1 in caso di fallimento, errno viene settato opportunamente.*/
 int writeFile(const char* pathname, const char* dirname){
-    errno = ENOTSUP;
-    return -1;
+    if(!pathname){
+        errno = EINVAL;
+        return -1;
+    }
+    if (connectionOn != 1) {
+        errno=ENOTCONN;
+        return -1;
+    }
+
+    FILE * fd_file;
+    int file_size;
+    if ((fd_file = fopen(pathname,"rb")) == NULL) {
+        errno = ENOENT;
+        return -1;
+    }
+
+    type_t request = WRITE;
+    CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen writeFile", -1);    
+
+    int answer = -1;
+    CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn readFile", -1);  
+    if(answer == -1){
+        errno = ECANCELED;
+        return -1;
+    }
+
+    struct stat st;
+    stat(pathname, &st);
+    file_size = st.st_size;
+    if(file_size > 0){
+        char* file_buffer = malloc(file_size*sizeof(char));
+        size_t len;
+        CHECK_EQ_EXIT((len = fread(file_buffer,sizeof(char),file_size,fd_file)), 0, "fread");
+        file_buffer[file_size++] = '\0';
+        fclose(fd_file);
+
+        CHECK_EQ_RETURN((writen(fd_socket, &file_size, sizeof(file_size))), -1, "writen writefile", -1);
+        CHECK_EQ_RETURN((writen(fd_socket, &file_buffer, sizeof(char))), -1, "writen writeFile", -1);
+
+        CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn writeFile", -1);
+        return answer;
+    }else{
+        return 0;
+    }
+
 }
 
 /*Richiesta di scrivere in append al file ‘pathname‘ i ‘size‘ bytes contenuti nel buffer ‘buf’. L’operazione di append
@@ -193,8 +241,7 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
     }
     type_t request;
     if(dirname == NULL) request = APPEND;  
-    else request = APPENDDIR;
-    if(request == APPENDDIR){
+    else{
         errno = ENOTSUP;
         return -1;
     }

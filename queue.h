@@ -50,10 +50,12 @@ int push(Queue_t *q, void *data);
  *
  *  \retval data puntatore al dato estratto.
  */
-void* pop(Queue_t *q);
+int pop(Queue_t *q);
 
 /** Ritorna la lunghezza attuale della coda passata come parametro.
  */
 unsigned long length(Queue_t *q);
+
+void printQueue(Queue_t* q);
 
 #endif /* QUEUE_H_ */

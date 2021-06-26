@@ -27,7 +27,10 @@
 #define O_CREATE 01
 #define O_LOCK 10
 
-void connection(char* socketname){
+static char socketname[100];
+
+void arg_f(char* s_name){
+    strcpy(socketname, s_name);
     struct timespec abstime;
     clock_gettime(CLOCK_REALTIME, &abstime);
     abstime.tv_sec += 5;
@@ -42,17 +45,15 @@ int main(int argc, char* argv[]){
         //se getop trova una delle opzioni ritrona un intero (relativo al carattere letto) quindi posso fare lo switch
         switch(opt){
             case 'h':
-                printf("-f filename\n-w dirname[,n=0]\n-W file1[,file2]\n-r file1[,file2]\n-R [n=0]\n-d dirname\n-t time\n-l file1[,file2]\n-u file1[,file2]\n-c file1[,file2]\n-p\n");
+                printf("-f filesocketname\n-w dirname[,n=0]\n-W file1[,file2]\n-r file1[,file2]\n-R [n=0]\n-d dirname\n-t time\n-l file1[,file2]\n-u file1[,file2]\n-c file1[,file2]\n-p\n");
                 break; //optarg = variabile che setta getopt all'argomento dell'opzione
             case 'f':
-                connection(optarg);
+                arg_f(optarg);
                 break;
             case 'w':
-                openFile("boia/ciao.c", O_CREATE);
+                closeConnection(socketname);
                 break;
             case 'W':
-                readFile("home/chiara/ciao.txt", buf, &size);
-                printf("%s\n", (char*)*buf);
                 break; 
             case 'r':
                 break;

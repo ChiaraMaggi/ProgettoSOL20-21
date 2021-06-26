@@ -53,7 +53,7 @@ Queue_t *initQueue() {
 }
 
 /*
-Eliminazione edlla lista
+Eliminazione della lista
 */
 void deleteQueue(Queue_t *q) {
     while(q->head != q->tail) {
@@ -88,8 +88,8 @@ int push(Queue_t *q, void *data) {
 /*
 Rimozione in fondo alla lista
 */
-void* pop(Queue_t *q) {        
-    if (q == NULL) { errno= EINVAL; return NULL;}
+int pop(Queue_t *q) {        
+    if (q == NULL) { errno= EINVAL; return -1;}
     LockQueue(q);
     while(q->head == q->tail) {
 	    UnlockQueueAndWait(q);
@@ -97,7 +97,7 @@ void* pop(Queue_t *q) {
     // locked
     assert(q->head->next);
     Node_t *n  = (Node_t *)q->head;
-    void *data = (q->head->next)->data;
+    int data = *(int*)(q->head->next)->data;
     q->head = q->head->next;
     q->qlen -= 1;
     assert(q->qlen>=0);
@@ -130,5 +130,13 @@ unsigned long length(Queue_t *q) {
     unsigned long len = q->qlen;
     UnlockQueue(q);
     return len;
+}
+
+void printQueue(Queue_t *q){
+    Node_t* cor = q->head;
+    while(cor != NULL){
+        printf("%d\n", *((int*)cor->data));
+        cor = cor->next;
+    }
 }
 

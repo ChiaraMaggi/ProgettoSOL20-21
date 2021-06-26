@@ -6,6 +6,11 @@
 
 #define HASHTABLE_INIT(numbuckets) hashtableInit(numbuckets, NULL, NULL)
 
+typedef struct QueueNode{
+	int data;
+	struct QueueNode* next;
+}QueueNode_t;
+
 typedef struct Node{
 	void* key;
 	void* data;

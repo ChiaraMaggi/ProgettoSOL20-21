@@ -12,14 +12,6 @@
 #include<stdio.h>
 #include<stdlib.h>
 
-typedef enum {OPEN, OPENC, CLOSECONN, READ, APPEND, APPENDDIR, CLOSE}type_t;
-
-typedef struct request{
-    type_t request;
-    char pathname[100];
-    int len;
-}request_t;
-
 int openConnection(const char* sockname, int msec, const struct timespec abstime);
 
 int closeConnection(const char* sockname);

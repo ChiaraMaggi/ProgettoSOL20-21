@@ -36,13 +36,25 @@
   if (pthread_mutex_lock(l)!=0){ \
     fprintf(stderr, "FATAL ERROR lock\n"); \
     pthread_exit((void*)EXIT_FAILURE); \
-  }   
+  }  
+
+#define LOCK_RETURN(l, r) \
+  if (pthread_mutex_lock(l)!=0)        {	\
+    fprintf(stderr, "ERRORE FATALE lock\n");				\
+    return r;								\
+  }  
 
 #define UNLOCK(l) \
   if (pthread_mutex_unlock(l)!=0){ \
     fprintf(stderr, "FATAL ERROR unlock\n"); \
     pthread_exit((void*)EXIT_FAILURE); \
   }
+
+#define UNLOCK_RETURN(l,r)  \
+    if (pthread_mutex_unlock(l)!=0)      {	\
+      fprintf(stderr, "ERRORE FATALE unlock\n");				\
+      return r;								\
+  } 
 
 #define WAIT(c,l) \
   if(pthread_cond_wait(c,l)!=0){ \
