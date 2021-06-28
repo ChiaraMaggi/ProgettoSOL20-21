@@ -83,12 +83,25 @@
     pthread_exit((void*)EXIT_FAILURE); \
   }
 
+#define SYSCALL_PTHREAD(c,s) \
+  if((c)!=0) {  \
+    perror(s);  \
+    fflush(stdout); \
+    exit(EXIT_FAILURE); \
+  }
+
+// utility break;
+#define SYSCALL_BREAK(c,e) \
+    if(c==-1) { perror(e);break; }
+
 
 /** 
  * @brief Controlla se la stringa passata come primo argomento e' un numero.
  * @return  0 ok  1 non e' un numbero   2 overflow/underflow
  */
 int isNumber(const char*, long*);
+
+int isdot(const char dir[]);
 
 ssize_t readn(int fd, void* ptr, size_t n);
 

@@ -38,16 +38,8 @@
 #define NUMBUCKETS 100
 #define MAX_PATH 200
 
-#define SYSCALL_PTHREAD(c,s) \
-    if((c)!=0) { perror(s);fflush(stdout);exit(EXIT_FAILURE); }
-// utility exit
-#define SYSCALL_EXIT(c,e) \
-    if(c==-1) { perror(e);exit(EXIT_FAILURE); }
-// utility break;
-#define SYSCALL_BREAK(c,e) \
-    if(c==-1) { perror(e);break; }
-
 /*================================== STRUTTURE UTILI ====================================================*/
+//campo "data" nella struttura del nodo della hashtable
 typedef struct File{
     char pathname[MAX_PATH];
     int fdcreator;
@@ -62,6 +54,12 @@ typedef struct Serverstate
    size_t used_space;
    size_t free_space;
 }Serverstate_t;
+
+typedef struct Statistics{
+    int max_saved_file;
+    int max_mbytes;
+    int switches;
+}Statistics_t;
 
 typedef enum {OPEN, OPENC, CLOSECONN, WRITE, APPEND, READ, CLOSE}type_t;
 
@@ -154,7 +152,7 @@ int removeNode (QueueNode_t** list) {
     pthread_mutex_unlock(&lockcoda);
     return data;
 }
-	size_t datasize;
+
 
 
 
@@ -206,20 +204,20 @@ int main(int argc, char* argv[]){
     //--------GESTIONE SEGNALI---------//
     struct sigaction s;
     sigset_t sigset;
-    SYSCALL_EXIT(sigfillset(&sigset),"sigfillset");
-    SYSCALL_EXIT(pthread_sigmask(SIG_SETMASK,&sigset,NULL),"pthread_sigmask");
+    CHECK_EQ_EXIT(sigfillset(&sigset),-1,"sigfillset");
+    CHECK_EQ_EXIT(pthread_sigmask(SIG_SETMASK,&sigset,NULL), -1, "pthread_sigmask");
     memset(&s,0,sizeof(s));
     s.sa_handler = gestore_term;
 
     //SYSCALL_EXIT(sigaction(SIGINT,&s,NULL),"sigaction");
-    SYSCALL_EXIT(sigaction(SIGQUIT,&s,NULL),"sigaction");
-    SYSCALL_EXIT(sigaction(SIGHUP,&s,NULL),"sigaction"); //TERMINAZIONE SOFT
+    CHECK_EQ_EXIT(sigaction(SIGQUIT,&s,NULL), -1, "sigaction");
+    CHECK_EQ_EXIT(sigaction(SIGHUP,&s,NULL), -1, "sigaction"); //TERMINAZIONE SOFT
 
     //ignoro SIGPIPE
     s.sa_handler = SIG_IGN;
-    SYSCALL_EXIT(sigaction(SIGPIPE,&s,NULL),"sigaction");
+    CHECK_EQ_EXIT(sigaction(SIGPIPE,&s,NULL), -1, "sigaction");
 
-    SYSCALL_EXIT(sigemptyset(&sigset),"sigemptyset");
+    CHECK_EQ_EXIT(sigemptyset(&sigset), -1, "sigemptyset");
     SYSCALL_PTHREAD(pthread_sigmask(SIG_SETMASK,&sigset,NULL),"pthread_sigmask");
 
     /*-----------CONFIGUARZIONE SERVER-----------------*/
@@ -275,7 +273,6 @@ int main(int argc, char* argv[]){
     //azzero master set e set temporaneo
     FD_ZERO(&set);
     FD_SET(listenfd, &set);
-    printf("%d\n", listenfd);
 
     //inserisco fd della pipe e del socket nel mastr set
     if(pipefd[0] > max_fd) max_fd = pipefd[0];

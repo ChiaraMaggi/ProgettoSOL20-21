@@ -21,6 +21,12 @@ int isNumber(const char* s, long* n) {
   return 1;   // non e' un numero
 }
 
+int isdot(const char dir[]){
+    int l = strlen(dir);
+    if((l>0 && dir[l-1] == '.')) return 1;
+    return 0;
+}
+
 /** Evita letture parziali
  *
  *   \retval -1   errore (errno settato)
