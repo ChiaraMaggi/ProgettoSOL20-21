@@ -33,7 +33,7 @@ static char socketname[100];
 
 void arg_f(char* s_name);
 int parse_w(char* optarg, char* dirname, long* filetoSend);
-int arg_w(char* dirname, int fileToSend);
+int arg_w(char* dirname, long* fileToSend);
 
 int main(int argc, char* argv[]){
     if(argc == 1){
@@ -59,7 +59,7 @@ int main(int argc, char* argv[]){
                     fprintf(stderr, "impossible to parse -w correctly\n");
                     break;
                 }
-                if(arg_w(dir, numFileToSend) == -1){
+                if(arg_w(dir, &numFileToSend) == -1){
                     fprintf(stderr, "operation -w doesn't end correctly\n");
                     break;
                 }
@@ -144,7 +144,7 @@ int parse_w(char* optarg, char* dirname, long* fileToSend){
     return 0;
 }
 
-int arg_w(char* dirname, int fileToSend){
+int arg_w(char* dirname, long* fileToSend){
     //controllo se dirname è effettivamente una directory
     struct stat statbuf;
     int r;
@@ -160,7 +160,7 @@ int arg_w(char* dirname, int fileToSend){
     //printf("Directory %s:\n", dirname);
     CHECK_EQ_RETURN((dir = opendir(dirname)), NULL, "opendir", -1);
     struct dirent* file;
-    while((errno = 0, file = readdir(dir)) != NULL){
+    while(*fileToSend != 0 && (errno = 0, file = readdir(dir)) != NULL){
         struct stat statebuf;
         char filename[MAX_LEN]; 
         int len1 = strlen(dirname);
@@ -181,14 +181,10 @@ int arg_w(char* dirname, int fileToSend){
                 if(ret == -1) return -1;
             }
         }else{
-            if(fileToSend > 0){
-                printf("%s\n", filename);
-                fileToSend = fileToSend - 1;
-                CHECK_EQ_RETURN(openFile(filename, O_CREATE), -1, "openFile", -1);
-                printf("tutto appo\n");
-               // CHECK_EQ_RETURN(writeFile(filename, NULL), -1, "writeFile", -1);
-               // CHECK_EQ_RETURN(closeFile(filename), -1, "closeFile", -1);
-            }
+            *fileToSend = *fileToSend - 1;
+            CHECK_EQ_RETURN(openFile(filename, O_CREATE), -1, "openFile", -1);
+            // CHECK_EQ_RETURN(writeFile(filename, NULL), -1, "writeFile", -1);
+            // CHECK_EQ_RETURN(closeFile(filename), -1, "closeFile", -1);
         }
     }
     if(errno != 0) perror("readdir");

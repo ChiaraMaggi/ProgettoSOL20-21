@@ -1,50 +1,69 @@
-#ifndef ICL_HASH_H
-#define ICL_HASH_H
+/**
+ * @file
+ *
+ * Header file for icl_hash routines.
+ *
+ */
+/* $Id$ */
+/* $UTK_Copyright: $ */
 
-#include<stdlib.h>
-#include<stdio.h>
+#ifndef icl_hash_h
+#define icl_hash_h
 
-#define HASHTABLE_INIT(numbuckets) hashtableInit(numbuckets, NULL, NULL)
+#include <stdio.h>
 
-typedef struct QueueNode{
-	int data;
-	struct QueueNode* next;
-}QueueNode_t;
-
-typedef struct Node{
-	void* key;
-	void* data;
-	size_t datasize;
-	struct Node* next;
-}Node_t;
-
-typedef struct Hashtable{
-	size_t numbuckets;
-	Node_t** buckets; 
-	int (*hashFunction) (const void*);
-	int (*hashCompare) (const void*, const void*);
-}Hashtable_t;
-
-unsigned int hashFunction(const void*);
-
-int hashCompare(const void*, const void*);
-
-Node_t* createNode(const void*, size_t, const void*, size_t);
-
-void printNode(const Node_t*);
-
-Hashtable_t* hashtableInit(size_t, size_t (*hash_function) (const void*), int (*hash_compare) (const void*, const void*));
-
-int hashtableInsert(Hashtable_t*, const void*, size_t, const void*, size_t);
-
-void* hashtableGetEntry(const Hashtable_t*, const void*);
-
-int hashtableFind(const Hashtable_t*, const void*);
-
-int hashtableDeleteNode(Hashtable_t*, const void*);
-
-void hashtableFree(Hashtable_t*);
-
-void hashtablePrint(const Hashtable_t*);
-
+#if defined(c_plusplus) || defined(__cplusplus)
+extern "C" {
 #endif
+
+typedef struct icl_entry_s {
+    void* key;
+    void *data;
+    struct icl_entry_s* next;
+} icl_entry_t;
+
+typedef struct icl_hash_s {
+    int nbuckets;
+    int nentries;
+    icl_entry_t **buckets;
+    unsigned int (*hash_function)(void*);
+    int (*hash_key_compare)(void*, void*);
+} icl_hash_t;
+
+icl_hash_t *
+icl_hash_create( int nbuckets, unsigned int (*hash_function)(void*), int (*hash_key_compare)(void*, void*) );
+
+void
+* icl_hash_find(icl_hash_t *, void* );
+
+icl_entry_t
+* icl_hash_insert(icl_hash_t *, void*, void *),
+    * icl_hash_update_insert(icl_hash_t *, void*, void *, void **);
+
+int
+icl_hash_destroy(icl_hash_t *, void (*)(void*), void (*)(void*)),
+    icl_hash_dump(FILE *, icl_hash_t *);
+
+int icl_hash_delete( icl_hash_t *ht, void* key, void (*free_key)(void*), void (*free_data)(void*) );
+
+/* simple hash function */
+unsigned int
+hash_pjw(void* key);
+
+/* compare function */
+int 
+string_compare(void* a, void* b);
+
+
+#define icl_hash_foreach(ht, tmpint, tmpent, kp, dp)    \
+    for (tmpint=0;tmpint<ht->nbuckets; tmpint++)        \
+        for (tmpent=ht->buckets[tmpint];                                \
+             tmpent!=NULL&&((kp=tmpent->key)!=NULL)&&((dp=tmpent->data)!=NULL); \
+             tmpent=tmpent->next)
+
+
+#if defined(c_plusplus) || defined(__cplusplus)
+}
+#endif
+
+#endif /* icl_hash_h */

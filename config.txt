@@ -7,7 +7,7 @@ NUM_WORKERS_THREAD = 100
 MAX_NUM_FILE = 200
 
 -Storage Size (in Mbyte):
-STORAGE_SIZE = 1024
+STORAGE_SIZE = 512
 
 -Socket Name (path assoluto):
-SOCKET_NAME = SOLsocket.sk
+SOCKET_NAME = ./SOLsocket.sk

@@ -34,11 +34,16 @@
 #define DEFAULT_WORKERS_THREAD 10
 #define DEFAULT_MAX_FILE 100
 #define DEFAULT_STORAGE_SIZE 512
-#define DEFAULT_SOCKET_NAME "SOLsocket.sk"
+#define DEFAULT_SOCKET_NAME "./SOLsocket.sk"
 #define NUMBUCKETS 100
 #define MAX_PATH 200
 
 /*================================== STRUTTURE UTILI ====================================================*/
+typedef struct QueueNode{
+	int data;
+	struct QueueNode* next;
+}QueueNode_t;
+
 //campo "data" nella struttura del nodo della hashtable
 typedef struct File{
     char pathname[MAX_PATH];
@@ -48,8 +53,7 @@ typedef struct File{
     int size;
 }File_t;
 
-typedef struct Serverstate
-{
+typedef struct Serverstate{
    int num_file;
    size_t used_space;
    size_t free_space;
@@ -64,8 +68,9 @@ typedef struct Statistics{
 typedef enum {OPEN, OPENC, CLOSECONN, WRITE, APPEND, READ, CLOSE}type_t;
 
 /*================================== VARIABILI GLOBALI ==================================================*/
-Hashtable_t* hashtable = NULL;
+icl_hash_t* storage_server;
 Info_t* informations;
+Serverstate_t* serverstate;
 int listenfd;
 QueueNode_t* clientQueue;
 pthread_t* workers;
@@ -79,6 +84,8 @@ pthread_cond_t notempty = PTHREAD_COND_INITIALIZER;
 
 /*=================================== FUNZIONI UTILI ====================================================*/
 void setDefault(Info_t* info);
+Serverstate_t* initServerstate();
+File_t* createFile(char* pathname, int fd);
 void cleanup(Info_t* info);
 int updatemax(fd_set set, int fdmax); 
 void insertNode (QueueNode_t** list, int data);  
@@ -86,6 +93,7 @@ int removeNode (QueueNode_t** list);
 static void gestore_term (int signum);
 void* workerFunction(void* args);   
 int opn(type_t req, int cfd); 
+int wrt(int cfd);
 
 /*===================================================== MAIN ==========================================*/
 int main(int argc, char* argv[]){
@@ -109,8 +117,9 @@ int main(int argc, char* argv[]){
     SYSCALL_PTHREAD(pthread_sigmask(SIG_SETMASK,&sigset,NULL),"pthread_sigmask");
 
     /*-----------CONFIGUARZIONE SERVER-----------------*/
-    hashtable = HASHTABLE_INIT(NUMBUCKETS);
+    storage_server = icl_hash_create(NUMBUCKETS, hash_pjw, string_compare);
     informations = initInfo();
+    serverstate = initServerstate();
 
     /*caso in cui il valori passati non sono corretti o incompleti*/
     if((argc == 3 && strcmp(argv[1], "-f")) || argc == 2){
@@ -240,6 +249,24 @@ void setDefault(Info_t* info){
     strcpy(info->socket_name, DEFAULT_SOCKET_NAME);
 }
 
+Serverstate_t* initServerstate(){
+    Serverstate_t* serverstate = malloc(sizeof(Serverstate_t));
+    serverstate->num_file = 0;
+    serverstate->free_space = informations->storage_size;
+    serverstate->used_space = 0;
+    return serverstate;
+}
+
+File_t* createFile(char* pathname, int fd){
+    File_t* file = malloc(sizeof(File_t));
+    strcpy(file->pathname, pathname);
+    file->fdcreator = fd;
+    insertNode(&file->openby, fd);
+    file->contenuto = NULL;
+    file->size = 0;
+    return file;
+}
+
 void cleanup(Info_t* info) {
     unlink(info->socket_name);
 }
@@ -329,15 +356,7 @@ void* workerFunction(void* args){
                 break;
             case OPENC:
                 answer = opn(OPENC, cfd);
-                printf("qui1\n");
                 writen(cfd, &answer, sizeof(int));
-                printf("qui2\n");
-                if(readn(cfd, &request, sizeof(type_t)) > 0){
-                    printf("%d\n", request);
-                    insertNode(&clientQueue, cfd);
-                    writen(pipefd[1], &cfd, sizeof(int));
-                }
-                printf("qui3\n");
                 break;
             case CLOSECONN:
                 answer = 0;
@@ -345,6 +364,7 @@ void* workerFunction(void* args){
                 close(cfd);
                 break;
             case WRITE:
+                wrt(cfd);
                 break;
             case APPEND:
                 break;
@@ -356,24 +376,42 @@ void* workerFunction(void* args){
                 fprintf(stderr, "invalid request\n");
                 break;
         }
+        if(request != CLOSECONN){
+            writen(pipefd[1], &cfd, sizeof(int));
+            insertNode(&clientQueue, cfd);
+        }
     }
     return 0;
 }
 
 int opn(type_t req, int cfd){
     int len;
+    File_t* tmp;
     CHECK_EQ_RETURN((readn(cfd, &len, sizeof(int))), -1, "readn opn", -1);
     char* pathname = malloc(len*sizeof(char));
     if(!pathname){
         perror("malloc");
         return -1;
     }
-    CHECK_EQ_RETURN((readn(cfd, pathname, len*sizeof(char))), -1, "read opn", -1);
-    //printf("%s\n", pathname);
-
+    CHECK_EQ_RETURN((readn(cfd, pathname, len*sizeof(char))), -1, "readn opn", -1);
+    printf("%s\n", pathname);
     if(req == OPENC){
-
+        if((tmp = icl_hash_find(storage_server, pathname)) != NULL) return -1;
+        else{
+            File_t* file = createFile(pathname, cfd);
+            icl_hash_insert(storage_server, pathname, file);
+            serverstate->num_file++;
+        }
     }
-
+    if(req == OPEN){
+        if((tmp = icl_hash_find(storage_server, pathname)) == NULL) return -1;
+        else{
+            insertNode(&tmp->openby, cfd);
+        }
+    }
     return 0;
+}
+
+int wrt(int cfd){
+    
 }
