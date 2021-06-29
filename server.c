@@ -78,126 +78,14 @@ pthread_mutex_t lockcoda = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t notempty = PTHREAD_COND_INITIALIZER;
 
 /*=================================== FUNZIONI UTILI ====================================================*/
-void setDefault(Info_t* info){
-    info->workers_thread = DEFAULT_WORKERS_THREAD;
-    info->max_file = DEFAULT_MAX_FILE;
-    info->storage_size = DEFAULT_STORAGE_SIZE;
-    strcpy(info->socket_name, DEFAULT_SOCKET_NAME);
-}
-
-void cleanup(Info_t* info) {
-    unlink(info->socket_name);
-}
-
-// ritorno l'indice massimo tra i descrittori attivi
-int updatemax(fd_set set, int fdmax) {
-    for(int i=(fdmax-1);i>=0;--i)
-	if (FD_ISSET(i, &set)) return i;
-    assert(1==0);
-    return -1;
-}
-
-//--------UTILITY PER GESTIONE SERVER----------//
-
-//INSERIMENTO IN TESTA
-void insertNode (QueueNode_t** list, int data) {
-    //printf("Inserisco in coda\n");
-    //fflush(stdout);
-    //PRENDO LOCK
-    SYSCALL_PTHREAD(pthread_mutex_lock(&lockcoda),"Lock coda");
-    QueueNode_t* new = malloc (sizeof(QueueNode_t));
-    if (new==NULL) {
-        perror("malloc");
-        exit(EXIT_FAILURE);
-    }
-    new->data = data;
-    new->next = *list;
-
-    //INSERISCI IN TESTA
-    *list = new;
-    //INVIO SIGNAL
-    SYSCALL_PTHREAD(pthread_cond_signal(&notempty),"Signal coda");
-    //RILASCIO LOCK
-    pthread_mutex_unlock(&lockcoda);
-    
-}
-
-//RIMOZIONE IN CODA 
-int removeNode (QueueNode_t** list) {
-    //PRENDO LOCK
-    SYSCALL_PTHREAD(pthread_mutex_lock(&lockcoda),"Lock coda");
-    //ASPETTO CONDIZIONE VERIFICATA 
-    while (clientQueue==NULL) {
-        pthread_cond_wait(&notempty,&lockcoda);
-        //printf("Consumatore Svegliato\n");
-        //fflush(stdout);
-    }
-    int data;
-    QueueNode_t* curr = *list;
-    QueueNode_t* prev = NULL;
-    while (curr->next != NULL) {
-        prev = curr;
-        curr = curr->next;
-    }
-    data = curr->data;
-    //LO RIMUOVO
-    if (prev == NULL) {
-        free(curr);
-        *list = NULL;
-    }else{
-        prev->next = NULL;
-        free(curr);
-    }
-    //RILASCIO LOCK
-    pthread_mutex_unlock(&lockcoda);
-    return data;
-}
-
-
-
-
-void* workerFunction(void* args){
-    int pfd = *((int*) args);
-    int cfd;
-    while(1){
-        cfd = removeNode(&clientQueue);
-        if(cfd == -1) break;
-        type_t request;
-        int answer;
-        CHECK_EQ_RETURN(readn(cfd, &request, sizeof(type_t)), -1, "readn request from client", -1);
-        switch (request){
-            case OPEN:
-                break;
-            case OPENC:
-                break;
-            case CLOSECONN:
-                answer = 0;
-                CHECK_EQ_RETURN((writen(cfd, &answer, sizeof(int))), -1, "writen answer closeConnection", -1);
-                close(cfd);
-                break;
-            case WRITE:
-                break;
-            case APPEND:
-                break;
-            case READ:
-                break;
-            case CLOSE:
-                break;
-            default:
-                break;
-        }
-    }
-    return 0;
-}
-
-static void gestore_term (int signum) {
-    if (signum==SIGINT || signum==SIGQUIT) {
-        term = 1;
-    } else if (signum==SIGHUP) {
-        //gestisci terminazione soft 
-        term = 2;
-    } 
-}
+void setDefault(Info_t* info);
+void cleanup(Info_t* info);
+int updatemax(fd_set set, int fdmax); 
+void insertNode (QueueNode_t** list, int data);  
+int removeNode (QueueNode_t** list);
+static void gestore_term (int signum);
+void* workerFunction(void* args);   
+int opn(type_t req, int cfd); 
 
 /*===================================================== MAIN ==========================================*/
 int main(int argc, char* argv[]){
@@ -340,6 +228,151 @@ int main(int argc, char* argv[]){
     }
     for (int i=0;i<informations->workers_thread;i++) {
         SYSCALL_PTHREAD(pthread_join(workers[i],NULL),"Errore join thread");
+    }
+
+    return 0;
+}
+
+void setDefault(Info_t* info){
+    info->workers_thread = DEFAULT_WORKERS_THREAD;
+    info->max_file = DEFAULT_MAX_FILE;
+    info->storage_size = DEFAULT_STORAGE_SIZE;
+    strcpy(info->socket_name, DEFAULT_SOCKET_NAME);
+}
+
+void cleanup(Info_t* info) {
+    unlink(info->socket_name);
+}
+
+int updatemax(fd_set set, int fdmax) {
+    for(int i=(fdmax-1);i>=0;--i)
+	if (FD_ISSET(i, &set)) return i;
+    assert(1==0);
+    return -1;
+}
+
+void insertNode (QueueNode_t** list, int data) {
+    //printf("Inserisco in coda\n");
+    //fflush(stdout);
+    //PRENDO LOCK
+    SYSCALL_PTHREAD(pthread_mutex_lock(&lockcoda),"Lock coda");
+    QueueNode_t* new = malloc (sizeof(QueueNode_t));
+    if (new==NULL) {
+        perror("malloc");
+        exit(EXIT_FAILURE);
+    }
+    new->data = data;
+    new->next = *list;
+
+    //INSERISCI IN TESTA
+    *list = new;
+    //INVIO SIGNAL
+    SYSCALL_PTHREAD(pthread_cond_signal(&notempty),"Signal coda");
+    //RILASCIO LOCK
+    pthread_mutex_unlock(&lockcoda);
+    
+}
+
+int removeNode (QueueNode_t** list) {
+    //PRENDO LOCK
+    SYSCALL_PTHREAD(pthread_mutex_lock(&lockcoda),"Lock coda");
+    //ASPETTO CONDIZIONE VERIFICATA 
+    while (clientQueue==NULL) {
+        pthread_cond_wait(&notempty,&lockcoda);
+        //printf("Consumatore Svegliato\n");
+        //fflush(stdout);
+    }
+    int data;
+    QueueNode_t* curr = *list;
+    QueueNode_t* prev = NULL;
+    while (curr->next != NULL) {
+        prev = curr;
+        curr = curr->next;
+    }
+    data = curr->data;
+    //LO RIMUOVO
+    if (prev == NULL) {
+        free(curr);
+        *list = NULL;
+    }else{
+        prev->next = NULL;
+        free(curr);
+    }
+    //RILASCIO LOCK
+    pthread_mutex_unlock(&lockcoda);
+    return data;
+}
+
+static void gestore_term (int signum) {
+    if (signum==SIGINT || signum==SIGQUIT) {
+        term = 1;
+    } else if (signum==SIGHUP) {
+        //gestisci terminazione soft 
+        term = 2;
+    } 
+}
+
+void* workerFunction(void* args){
+    int pfd = *((int*) args);
+    int cfd;
+    while(1){
+        cfd = removeNode(&clientQueue);
+        if(cfd == -1) break;
+        type_t request;
+        int answer;
+        if(readn(cfd, &request, sizeof(type_t)) == -1){
+            request = -1;
+        }
+        switch (request){
+            case OPEN:
+                opn(OPEN, cfd);
+                break;
+            case OPENC:
+                answer = opn(OPENC, cfd);
+                printf("qui1\n");
+                writen(cfd, &answer, sizeof(int));
+                printf("qui2\n");
+                if(readn(cfd, &request, sizeof(type_t)) > 0){
+                    printf("%d\n", request);
+                    insertNode(&clientQueue, cfd);
+                    writen(pipefd[1], &cfd, sizeof(int));
+                }
+                printf("qui3\n");
+                break;
+            case CLOSECONN:
+                answer = 0;
+                writen(cfd, &answer, sizeof(int));
+                close(cfd);
+                break;
+            case WRITE:
+                break;
+            case APPEND:
+                break;
+            case READ:
+                break;
+            case CLOSE:
+                break;
+            default:
+                fprintf(stderr, "invalid request\n");
+                break;
+        }
+    }
+    return 0;
+}
+
+int opn(type_t req, int cfd){
+    int len;
+    CHECK_EQ_RETURN((readn(cfd, &len, sizeof(int))), -1, "readn opn", -1);
+    char* pathname = malloc(len*sizeof(char));
+    if(!pathname){
+        perror("malloc");
+        return -1;
+    }
+    CHECK_EQ_RETURN((readn(cfd, pathname, len*sizeof(char))), -1, "read opn", -1);
+    //printf("%s\n", pathname);
+
+    if(req == OPENC){
+
     }
 
     return 0;

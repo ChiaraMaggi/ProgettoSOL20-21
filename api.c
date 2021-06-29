@@ -119,7 +119,7 @@ int openFile(const char* pathname, int flags){
     if(flags == 01)
         request = OPENC;
     
-    int len = strlen(pathname);
+    int len = strlen(pathname)+1;
     CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen openFile", -1);    
     CHECK_EQ_RETURN((writen(fd_socket, &len, sizeof(int))), -1, "writen openFile", -1);
     CHECK_EQ_RETURN((writen(fd_socket, pathname, len*sizeof(char))), -1, "writen openFile", -1);
@@ -147,7 +147,7 @@ int readFile(const char* pathname, void** buf, size_t* size){
         return -1;
     }
     type_t request = READ;
-    int len = strlen(pathname);
+    int len = strlen(pathname)+1;
     CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen readFile", -1);    
     CHECK_EQ_RETURN((writen(fd_socket, &len, sizeof(int))), -1, "writen readFile", -1);
     CHECK_EQ_RETURN((writen(fd_socket, pathname, len*sizeof(char))), -1, "writen readFile", -1);
@@ -196,8 +196,11 @@ int writeFile(const char* pathname, const char* dirname){
     }
 
     type_t request = WRITE;
-    CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen writeFile", -1);    
-
+    int len = strlen(pathname);
+    CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen writeFile", -1);  
+    CHECK_EQ_RETURN((writen(fd_socket, &len, sizeof(int))), -1, "writen readFile", -1);
+    CHECK_EQ_RETURN((writen(fd_socket, pathname, len*sizeof(char))), -1, "writen readFile", -1);
+  
     int answer = -1;
     CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn readFile", -1);  
     if(answer == -1){

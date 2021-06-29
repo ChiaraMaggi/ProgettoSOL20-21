@@ -114,8 +114,7 @@ int hashtableFind(const Hashtable_t* hashtable, const void* key){
 	if (hashtable == NULL) return 0;
 	size_t hash = hashtable->hashFunction(key) % hashtable->numbuckets;
 	Node_t* node = hashtable->buckets[hash];
-	while (node != NULL)
-{
+	while (node != NULL){
 		if (hashtable->hashCompare(node->key, key) == 0) return 1;
 		node = node->next;
 	}

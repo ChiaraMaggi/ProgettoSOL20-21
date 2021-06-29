@@ -59,7 +59,10 @@ int main(int argc, char* argv[]){
                     fprintf(stderr, "impossible to parse -w correctly\n");
                     break;
                 }
-                arg_w(dir, numFileToSend);
+                if(arg_w(dir, numFileToSend) == -1){
+                    fprintf(stderr, "operation -w doesn't end correctly\n");
+                    break;
+                }
                 break;
             case 'W':
                 break; 
@@ -86,11 +89,11 @@ int main(int argc, char* argv[]){
                     case 't':
                         break;
                     default:
-                        fprintf(stderr, "L'opzione '-%c' richiede un argomento\n", optopt); 
+                        fprintf(stderr, "Option '-%c' needs an argoument\n", optopt); 
                 } break;
             }
             case '?':{ //getopt ritrona ? quando l'operazione da eseguire non appartiene alla opstring
-                fprintf(stderr, "L'opzione '-%c' non e' gestita\n", optopt); 
+                fprintf(stderr, "'-%c' is an invalid option \n", optopt); 
             } break;
             default:;
         }
@@ -154,53 +157,42 @@ int arg_w(char* dirname, int fileToSend){
 
     DIR* dir;
     
-    printf("Directory %s:\n", dirname);
-    if((dir = opendir(dirname)) == NULL){
-        perror("opendir");
-        return -1;
-    }else{
-        struct dirent* file;
-        while((errno = 0, file = readdir(dir)) != NULL){
-            struct stat statebuf;
-            char filename[MAX_LEN]; 
-            int len1 = strlen(dirname);
-            int len2 = strlen(file->d_name);
-            if ((len1+len2+2)>MAX_LEN) {
-                fprintf(stderr, "ERRORE: MAXFILENAME troppo piccolo\n");
-		        exit(EXIT_FAILURE);
-            }	    
-            strncpy(filename,dirname, MAX_LEN-1);
-            strncat(filename,"/", MAX_LEN-1);
-            strncat(filename,file->d_name, MAX_LEN-1);
+    //printf("Directory %s:\n", dirname);
+    CHECK_EQ_RETURN((dir = opendir(dirname)), NULL, "opendir", -1);
+    struct dirent* file;
+    while((errno = 0, file = readdir(dir)) != NULL){
+        struct stat statebuf;
+        char filename[MAX_LEN]; 
+        int len1 = strlen(dirname);
+        int len2 = strlen(file->d_name);
+        if ((len1+len2+2)>MAX_LEN) {
+            fprintf(stderr, "ERRORE: MAXFILENAME too small\n");
+            exit(EXIT_FAILURE);
+        }	    
+        strncpy(filename,dirname, MAX_LEN-1);
+        strncat(filename,"/", MAX_LEN-1);
+        strncat(filename,file->d_name, MAX_LEN-1);
 
-            if(stat(filename, &statebuf) == -1){
-                perror("stat");
-                return -1;
+        CHECK_EQ_RETURN(stat(filename, &statebuf), -1, "stat", -1);
+       
+        if(S_ISDIR(statebuf.st_mode)){
+            if(!isdot(filename)){
+                int ret = arg_w(filename, fileToSend);
+                if(ret == -1) return -1;
             }
-            if(S_ISDIR(statebuf.st_mode)){
-                if(!isdot(filename)){
-                    arg_w(filename, fileToSend-1);
-                }
-            }else{
-                char mode[10] = {'-','-','-','-','-','-','-','-','-','\0'};
-		        if (S_IRUSR & statbuf.st_mode) mode[0]='r';
-		        if (S_IWUSR & statbuf.st_mode) mode[1]='w';
-		        if (S_IXUSR & statbuf.st_mode) mode[2]='x';
-
-		        if (S_IRGRP & statbuf.st_mode) mode[3]='r';
-		        if (S_IWGRP & statbuf.st_mode) mode[4]='w';
-		        if (S_IXGRP & statbuf.st_mode) mode[5]='x';
-
-        		if (S_IROTH & statbuf.st_mode) mode[6]='r';
-		        if (S_IWOTH & statbuf.st_mode) mode[7]='w';
-		        if (S_IXOTH & statbuf.st_mode) mode[8]='x';
-		
-		        fprintf(stdout, "%20s: %10ld  %s\n", file->d_name, statbuf.st_size, mode);		
+        }else{
+            if(fileToSend > 0){
+                printf("%s\n", filename);
+                fileToSend = fileToSend - 1;
+                CHECK_EQ_RETURN(openFile(filename, O_CREATE), -1, "openFile", -1);
+                printf("tutto appo\n");
+               // CHECK_EQ_RETURN(writeFile(filename, NULL), -1, "writeFile", -1);
+               // CHECK_EQ_RETURN(closeFile(filename), -1, "closeFile", -1);
             }
         }
-        if(errno != 0) perror("readdir");
-        closedir(dir);
     }
+    if(errno != 0) perror("readdir");
+    closedir(dir);
     return 0;
 }
 
