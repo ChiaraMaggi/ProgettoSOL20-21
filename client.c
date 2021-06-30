@@ -98,11 +98,11 @@ int main(int argc, char* argv[]){
             default:;
         }
     }
-    sleep(15);
+    sleep(10);/*
     if(closeConnection("SOLsocket.sk") == -1){
         perror("ERROR closing connection");
         return (EXIT_FAILURE);
-    }
+    }*/
     return 0;
 }
 
@@ -161,6 +161,7 @@ int arg_w(char* dirname, long* fileToSend){
     CHECK_EQ_RETURN((dir = opendir(dirname)), NULL, "opendir", -1);
     struct dirent* file;
     while(*fileToSend != 0 && (errno = 0, file = readdir(dir)) != NULL){
+        printf("entro\n");
         struct stat statebuf;
         char filename[MAX_LEN]; 
         int len1 = strlen(dirname);
@@ -177,14 +178,18 @@ int arg_w(char* dirname, long* fileToSend){
        
         if(S_ISDIR(statebuf.st_mode)){
             if(!isdot(filename)){
+                printf("sottodirectory\n");
                 int ret = arg_w(filename, fileToSend);
                 if(ret == -1) return -1;
             }
         }else{
-            *fileToSend = *fileToSend - 1;
+            printf("%s\n", filename);
             CHECK_EQ_RETURN(openFile(filename, O_CREATE), -1, "openFile", -1);
-            // CHECK_EQ_RETURN(writeFile(filename, NULL), -1, "writeFile", -1);
+            printf("file creato\n");
+            CHECK_EQ_RETURN(writeFile(filename, NULL), -1, "writeFile", -1);
+            printf("file scritto\n");
             // CHECK_EQ_RETURN(closeFile(filename), -1, "closeFile", -1);
+            *fileToSend = *fileToSend - 1;
         }
     }
     if(errno != 0) perror("readdir");

@@ -46,8 +46,8 @@ typedef struct QueueNode{
 
 //campo "data" nella struttura del nodo della hashtable
 typedef struct File{
-    char pathname[MAX_PATH];
     int fdcreator;
+    int operationdonebycreator;
     QueueNode_t* openby;
     void* contenuto;
     int size;
@@ -84,12 +84,13 @@ pthread_cond_t notempty = PTHREAD_COND_INITIALIZER;
 
 /*=================================== FUNZIONI UTILI ====================================================*/
 void setDefault(Info_t* info);
-Serverstate_t* initServerstate();
+Serverstate_t* initServerstate(long size);
 File_t* createFile(char* pathname, int fd);
 void cleanup(Info_t* info);
 int updatemax(fd_set set, int fdmax); 
 void insertNode (QueueNode_t** list, int data);  
 int removeNode (QueueNode_t** list);
+int findNode(QueueNode_t** list, int data);
 static void gestore_term (int signum);
 void* workerFunction(void* args);   
 int opn(type_t req, int cfd); 
@@ -119,7 +120,6 @@ int main(int argc, char* argv[]){
     /*-----------CONFIGUARZIONE SERVER-----------------*/
     storage_server = icl_hash_create(NUMBUCKETS, hash_pjw, string_compare);
     informations = initInfo();
-    serverstate = initServerstate();
 
     /*caso in cui il valori passati non sono corretti o incompleti*/
     if((argc == 3 && strcmp(argv[1], "-f")) || argc == 2){
@@ -140,6 +140,8 @@ int main(int argc, char* argv[]){
         }    
     }
     
+    serverstate = initServerstate(informations->storage_size);
+
     //THREAD POOL
     CHECK_EQ_EXIT((workers = (pthread_t*)malloc(sizeof(pthread_t) * informations->workers_thread)), NULL, "Creazione Thread Pool\n");
    
@@ -164,6 +166,7 @@ int main(int argc, char* argv[]){
 
 	CHECK_EQ_EXIT(bind(listenfd, (struct sockaddr*)&sa, sizeof(sa)), -1, "bind");
 	CHECK_EQ_EXIT(listen(listenfd, SOMAXCON), -1, "listen");
+    CHECK_EQ_EXIT(pipe(pipefd), -1, "pipe");
 
     if(listenfd > max_fd) max_fd = listenfd;
 
@@ -195,6 +198,7 @@ int main(int argc, char* argv[]){
                 break;
             }
         }
+        printf("select si sveglia\n");
         //capiamo da chi abbiamo ricevuto una richiesta
         int cfd;
         for(int i=0; i<=max_fd; i++){
@@ -208,28 +212,31 @@ int main(int argc, char* argv[]){
                     printf("new connection accepted: client %d\n", cfd);
 
                 }else if(i == pipefd[0]){ //è una scrittura sulla pipe
+                    printf("nuova scrittura su pipe\n");
                     int fdfrompipe;
                     int len;
                     int flag;
-                    if((len = read(pipefd[0], &fdfrompipe, sizeof(fdfrompipe))) > 0){
-                        CHECK_EQ_EXIT(read(pipefd[0], &flag, sizeof(flag)), -1, "read pipe");
-                        if(flag == -1){
+                    if((len = readn(pipefd[0], &fdfrompipe, sizeof(int))) != -1){
+                        //CHECK_EQ_EXIT(read(pipefd[0], &flag, sizeof(flag)), -1, "read pipe");
+                        /*if(flag == -1){
                             printf("closing connection with client\n");
                             FD_CLR(fdfrompipe, &set);
                             if(fdfrompipe == max_fd) max_fd = updatemax(set, max_fd); //se fd rimosso era il max devo trovare un nuovo max
                             close(fdfrompipe); 
                             clients--;
-                        }else{
+                        }else{*/
+                        printf("fdfrompipe %d\n", fdfrompipe);
                             FD_SET(fdfrompipe, &set);
                             if(fdfrompipe > max_fd) max_fd = fdfrompipe;
-                        }
+                       /* }*/
                     }else if(len == -1){
                         perror("read pipe");
                         exit(EXIT_FAILURE);
                     }
                 }else{
-                    printf("client pronto in read\n");
+                    printf("new request from %d\n", i);
                     insertNode(&clientQueue, i);
+                    printf("insierito nodo %d\n", i);
                     FD_CLR(i, &set);
                 }
             }
@@ -249,18 +256,18 @@ void setDefault(Info_t* info){
     strcpy(info->socket_name, DEFAULT_SOCKET_NAME);
 }
 
-Serverstate_t* initServerstate(){
+Serverstate_t* initServerstate(long size){
     Serverstate_t* serverstate = malloc(sizeof(Serverstate_t));
     serverstate->num_file = 0;
-    serverstate->free_space = informations->storage_size;
+    serverstate->free_space = size;
     serverstate->used_space = 0;
     return serverstate;
 }
 
 File_t* createFile(char* pathname, int fd){
     File_t* file = malloc(sizeof(File_t));
-    strcpy(file->pathname, pathname);
     file->fdcreator = fd;
+    file->operationdonebycreator++;
     insertNode(&file->openby, fd);
     file->contenuto = NULL;
     file->size = 0;
@@ -330,6 +337,20 @@ int removeNode (QueueNode_t** list) {
     return data;
 }
 
+int findNode (QueueNode_t** list, int data){
+    SYSCALL_PTHREAD(pthread_mutex_lock(&lockcoda),"Lock coda");
+    QueueNode_t* curr = *list;
+    while (curr != NULL) {
+        if(curr->data == data)
+            return 1;
+        curr = curr->next;
+    }
+    free(curr);
+    //RILASCIO LOCK
+    pthread_mutex_unlock(&lockcoda);
+    return 0;
+}
+
 static void gestore_term (int signum) {
     if (signum==SIGINT || signum==SIGQUIT) {
         term = 1;
@@ -344,19 +365,21 @@ void* workerFunction(void* args){
     int cfd;
     while(1){
         cfd = removeNode(&clientQueue);
+        printf("rimosso nodo: %d\n", cfd);
         if(cfd == -1) break;
         type_t request;
         int answer;
         if(readn(cfd, &request, sizeof(type_t)) == -1){
             request = -1;
         }
+        printf("REQUEST: %d\n", request);
         switch (request){
             case OPEN:
                 opn(OPEN, cfd);
                 break;
             case OPENC:
+                printf("APERTURA file\n");
                 answer = opn(OPENC, cfd);
-                writen(cfd, &answer, sizeof(int));
                 break;
             case CLOSECONN:
                 answer = 0;
@@ -364,7 +387,9 @@ void* workerFunction(void* args){
                 close(cfd);
                 break;
             case WRITE:
-                wrt(cfd);
+                printf("SCRITTURA file\n");
+                answer = wrt(cfd);
+                printf("inviata risposta\n");
                 break;
             case APPEND:
                 break;
@@ -376,9 +401,10 @@ void* workerFunction(void* args){
                 fprintf(stderr, "invalid request\n");
                 break;
         }
+        if(answer == -1) fprintf(stderr, "impossible to sotisfy the request %d\n", request);
         if(request != CLOSECONN){
             writen(pipefd[1], &cfd, sizeof(int));
-            insertNode(&clientQueue, cfd);
+            printf("scrittura su pipe\n");
         }
     }
     return 0;
@@ -386,6 +412,7 @@ void* workerFunction(void* args){
 
 int opn(type_t req, int cfd){
     int len;
+    int answer = 0;
     File_t* tmp;
     CHECK_EQ_RETURN((readn(cfd, &len, sizeof(int))), -1, "readn opn", -1);
     char* pathname = malloc(len*sizeof(char));
@@ -396,22 +423,66 @@ int opn(type_t req, int cfd){
     CHECK_EQ_RETURN((readn(cfd, pathname, len*sizeof(char))), -1, "readn opn", -1);
     printf("%s\n", pathname);
     if(req == OPENC){
-        if((tmp = icl_hash_find(storage_server, pathname)) != NULL) return -1;
+        if((tmp = icl_hash_find(storage_server, pathname)) != NULL) answer = -1;
         else{
-            File_t* file = createFile(pathname, cfd);
-            icl_hash_insert(storage_server, pathname, file);
-            serverstate->num_file++;
+            if(serverstate->num_file < informations->max_file){
+                File_t* file = createFile(pathname, cfd);
+                icl_hash_insert(storage_server, pathname, file);
+                serverstate->num_file++;
+            }
         }
     }
     if(req == OPEN){
-        if((tmp = icl_hash_find(storage_server, pathname)) == NULL) return -1;
+        if((tmp = icl_hash_find(storage_server, pathname)) == NULL) answer = -1;
         else{
             insertNode(&tmp->openby, cfd);
         }
     }
+    CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen opn", -1);
     return 0;
 }
 
 int wrt(int cfd){
-    
+    int len;
+    int answer = 0;
+    CHECK_EQ_RETURN(readn(cfd, &len, sizeof(int)), -1, "readn wrt", -1);
+    char* pathname = malloc(len*sizeof(char));
+    if(!pathname){
+        perror("malloc");
+        return -1;
+    }
+    CHECK_EQ_RETURN(readn(cfd, pathname, len*sizeof(char)), -1, "readn wrt", -1);
+    printf("%s\n", pathname);
+
+    int filesize;
+    CHECK_EQ_RETURN(readn(cfd, &filesize, sizeof(int)), -1, "readn wrt", -1);
+
+    char* filebuffer = malloc((filesize+1)*sizeof(char));
+    if(!filebuffer){
+        perror("malloc");
+        return -1;
+    }
+
+    CHECK_EQ_RETURN(readn(cfd, filebuffer, filesize+1), -1, "readn wrt", -1);
+    //printf("%s", filebuffer);
+    File_t* tmp;
+    if((tmp = icl_hash_find(storage_server, pathname)) != NULL){
+        int flag = findNode(&tmp->openby, cfd);
+        if(tmp->fdcreator == cfd && tmp->operationdonebycreator == 1 && flag){ //controllo che sia il creatore e abbia fatto come ultima operazione openFile con O_CREATE
+            if(serverstate->free_space >= filesize){
+                tmp->size = filesize;
+                tmp->contenuto = malloc(filesize*sizeof(char));
+                strcpy(tmp->contenuto, filebuffer);
+                tmp->operationdonebycreator++;
+
+                serverstate->free_space = serverstate->free_space - filesize;
+                serverstate->used_space = serverstate->used_space + filesize;
+            }
+            else{
+                //politica di rimpiazzo
+            }
+        }else answer = -1;
+    }else answer = -1;
+    CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen wrt", -1);
+    return 0;
 }

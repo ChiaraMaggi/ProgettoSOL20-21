@@ -118,14 +118,15 @@ int openFile(const char* pathname, int flags){
         request = OPEN;
     if(flags == 01)
         request = OPENC;
-    
+    printf("comincio\n");
     int len = strlen(pathname)+1;
     CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen openFile", -1);    
     CHECK_EQ_RETURN((writen(fd_socket, &len, sizeof(int))), -1, "writen openFile", -1);
     CHECK_EQ_RETURN((writen(fd_socket, pathname, len*sizeof(char))), -1, "writen openFile", -1);
-
+    printf("ho scritto\n");
     int answer = -1;  //risposta server
     CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn openFile", -1);
+    printf("ricevuto risposta\n");
 	if(answer == -1){
 		errno = ECANCELED;
 		return -1;
@@ -188,6 +189,12 @@ int writeFile(const char* pathname, const char* dirname){
         return -1;
     }
 
+    type_t request = WRITE;
+    int len = strlen(pathname)+1;
+    CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen writeFile", -1);  
+    CHECK_EQ_RETURN((writen(fd_socket, &len, sizeof(int))), -1, "writen readFile", -1);
+    CHECK_EQ_RETURN((writen(fd_socket, pathname, len*sizeof(char))), -1, "writen readFile", -1);
+  
     FILE * fd_file;
     int file_size;
     if ((fd_file = fopen(pathname,"rb")) == NULL) {
@@ -195,32 +202,28 @@ int writeFile(const char* pathname, const char* dirname){
         return -1;
     }
 
-    type_t request = WRITE;
-    int len = strlen(pathname);
-    CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen writeFile", -1);  
-    CHECK_EQ_RETURN((writen(fd_socket, &len, sizeof(int))), -1, "writen readFile", -1);
-    CHECK_EQ_RETURN((writen(fd_socket, pathname, len*sizeof(char))), -1, "writen readFile", -1);
-  
     int answer = -1;
-    CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn readFile", -1);  
-    if(answer == -1){
-        errno = ECANCELED;
-        return -1;
-    }
 
     struct stat st;
     stat(pathname, &st);
     file_size = st.st_size;
     if(file_size > 0){
-        char* file_buffer = malloc(file_size*sizeof(char));
-        size_t len;
-        CHECK_EQ_EXIT((len = fread(file_buffer,sizeof(char),file_size,fd_file)), 0, "fread");
-        file_buffer[file_size++] = '\0';
+        char* file_buffer = malloc((file_size+1)*sizeof(char));
+         if (file_buffer==NULL) {
+            errno=ENOTRECOVERABLE;
+            return -1;
+        }
+        size_t newlen = fread(file_buffer,sizeof(char),file_size,fd_file);
+        if(ferror(fd_file) != 0){
+            errno = EREMOTEIO;
+            free(file_buffer);
+            return -1;
+        }
+        file_buffer[newlen++] = '\0';
         fclose(fd_file);
 
-        CHECK_EQ_RETURN((writen(fd_socket, &file_size, sizeof(file_size))), -1, "writen writefile", -1);
-        CHECK_EQ_RETURN((writen(fd_socket, &file_buffer, sizeof(char))), -1, "writen writeFile", -1);
-
+        CHECK_EQ_RETURN((writen(fd_socket, &file_size, sizeof(int))), -1, "writen writefile", -1);
+        CHECK_EQ_RETURN((writen(fd_socket, file_buffer, file_size+1)), -1, "writen writeFile", -1);
         CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn writeFile", -1);
         return answer;
     }else{
