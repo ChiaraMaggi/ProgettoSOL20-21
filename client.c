@@ -19,7 +19,9 @@
 #include<sys/stat.h>
 #include<dirent.h>
 #include<limits.h>
-#include <libgen.h>
+#include<dirent.h>
+#include<libgen.h>
+#include<fcntl.h>
 
 #include "parsing.h"
 #include "utils.h"
@@ -30,6 +32,7 @@
 #define MAX_DIR_LEN 200
 
 static char socketname[100];
+static int print_flag = 0;
 
 int arg_f(char* s_name);
 int parse_w(char* optarg, char* dirname, long* filetoSend);
@@ -42,7 +45,7 @@ int main(int argc, char* argv[]){
         printf("One command is necessary: use -h for see the options\n");
         return 0;
     }
-    int flag_h=0, flag_p=0, flag_d=0, flag_r=0, flag_R=0, flag_f=0, print_flag=0;
+    int flag_h=0, flag_p=0, flag_d=0, flag_r=0, flag_R=0, flag_f=0;
     char* dir = NULL;
 
     for(int i=0; i<argc; i++){
@@ -105,7 +108,7 @@ int main(int argc, char* argv[]){
                 break;
             case 'W':
                 if(arg_W(optarg) == -1){
-                    fprintf(stderr, "Operation -W doean't end correctly\n");
+                    fprintf(stderr, "Operation -W doesn't end correctly\n");
                 }
                 break; 
             case 'D':
@@ -173,7 +176,6 @@ int parse_w(char* optarg, char* dirname, long* fileToSend){
     if(optarg[i] == '\0')   strncpy(dirname, optarg, i+1);
     else{
         strncpy(dirname, optarg, i);  
-        printf("%s\n", dirname); 
         char* numFile = malloc(sizeof(char)*(strlen(optarg) - i+1));
         int j = 0;
         i++;
@@ -194,7 +196,7 @@ int arg_w(char* dirname, long* fileToSend){
     //controllo se dirname è effettivamente una directory
     struct stat statbuf;
     int r;
-    CHECK_EQ_EXIT((r = stat(dirname, &statbuf)), -1, "stat");
+    CHECK_EQ_EXIT((r = stat(dirname, &statbuf)), -1, "stat arg_w");
     if(!S_ISDIR(statbuf.st_mode)){
         printf("%s is not a directory\n", dirname);
         exit(EXIT_FAILURE);
@@ -208,7 +210,6 @@ int arg_w(char* dirname, long* fileToSend){
 
     //se n=0????
     while(*fileToSend != 0 && (errno = 0, file = readdir(dir)) != NULL){
-        printf("entro\n");
         struct stat statebuf;
         char filename[MAX_LEN]; 
         int len1 = strlen(dirname);
@@ -225,7 +226,6 @@ int arg_w(char* dirname, long* fileToSend){
        
         if(S_ISDIR(statebuf.st_mode)){
             if(!isdot(filename)){
-                printf("sottodirectory\n");
                 int ret = arg_w(filename, fileToSend);
                 if(ret == -1) return -1;
             }
@@ -233,11 +233,9 @@ int arg_w(char* dirname, long* fileToSend){
             char resolvedpath[PATH_MAX];
             char* res;
             CHECK_EQ_RETURN((res = realpath(filename, resolvedpath)), NULL, "realpath", -1);
-            printf("%s\n", resolvedpath);
+            //printf("%s\n", resolvedpath);
             CHECK_EQ_RETURN(openFile(resolvedpath, O_CREATE), -1, "openFile arg_w", -1);
-            printf("file creato\n");
-            //CHECK_EQ_RETURN(writeFile(resolvedpath, NULL), -1, "writeFile arg_w", -1);
-            printf("file scritto\n");
+            CHECK_EQ_RETURN(writeFile(resolvedpath, NULL), -1, "writeFile arg_w", -1);
             CHECK_EQ_RETURN(closeFile(resolvedpath), -1, "closeFile arg_w", -1);
             *fileToSend = *fileToSend - 1;
         }
@@ -259,9 +257,9 @@ int arg_W(char* optarg){
         struct stat info_file;
         stat(resolvedpath, &info_file);
         if (S_ISREG(info_file.st_mode)) {
-            CHECK_EQ_RETURN(openFile(token, O_CREATE), -1, "openFile arg_W", -1);
-            CHECK_EQ_RETURN(writeFile(token, NULL), -1, "writeFile arg_W", -1);
-            CHECK_EQ_RETURN(closeFile(token), -1, "closeFile arg_W", -1);
+            CHECK_EQ_RETURN(openFile(resolvedpath, O_CREATE), -1, "openFile arg_W", -1);
+            CHECK_EQ_RETURN(writeFile(resolvedpath, NULL), -1, "writeFile arg_W", -1);
+            CHECK_EQ_RETURN(closeFile(resolvedpath), -1, "closeFile arg_W", -1);
         }
         token = strtok_r(NULL, ",", &tmpstr);
     }
@@ -276,63 +274,43 @@ int arg_r(char* optarg, char* dir){
         char* file = token;
         char* res;
         CHECK_EQ_RETURN((res = realpath(file, resolvedpath)), NULL, "realpath arg_r", -1);
-        CHECK_EQ_RETURN(openFile(resolvedpath, 0), -1, "openFile arg_r", -1);
+        CHECK_EQ_RETURN(openFile(resolvedpath, 00), -1, "openFile arg_r", -1);
 
         //READ FILE
-        char * buf = NULL;
+        char* buf;
         size_t size;
-       /* CHECK_EQ_RETURN(readFile(resolvedpath,(void**)&buf,&size), -1, "readFile arg_r", -1);
-        if(dir != NULL  && buf!= NULL && filesize != -1){
-			int fd_file;
-		    char str[10];
-			
-			char namefile[40] = {'f','i','l','e'};
-			if(sprintf(str, "%d", n) <0){
-				token = strtok_r(NULL, ",", &tmpstr);
-				free(buf);
-				continue;
-			}
-
-			strncat(namefile,str,strlen(str));
-
-			char* dirfile = malloc(len+strlen(namefile));
-			if(!dirfile){
-				token = strtok_r(NULL, ",", &tmpstr);
-				free(dirfile);
-				free(buf);
-				continue;
-			}
-			memset(dirfile,'\0',len);
-
-			strncpy(dirfile,dirname,len);
-
-			strncat(dirfile, namefile, strlen(namefile));
-			n++;
-
-			if((fd_file = open(dirfile, O_CREAT|O_WRONLY, 0666)) == -1){
+        CHECK_EQ_RETURN(readFile(resolvedpath,(void**)&buf,&size), -1, "readFile arg_r", -1);
+        if(dir != NULL){
+            char* filename = basename(resolvedpath);
+            char path[PATH_MAX];
+            sprintf(path, "%s/%s", dir, filename);
+            int fd_file;
+            int check = mkdir_p(dir);
+            if(check == 0) printf("cartella creata\n");
+            else printf("cartella non creata\n");
+            //CREA FILE SE NON ESISTE
+            if((fd_file = open(path, O_CREAT|O_WRONLY, 0666)) == -1){
 				perror("open");
 				if(print_flag)
 					printf("richiesta di scrittura del file <%s> su disco è fallita\n",token);
 				token = strtok_r(NULL, ",", &tmpstr);
-				free(dirfile);
-				free(buf);
+				//free(buf);
 				continue;
 			}
 
-			if(writen(fd_file, buf, filesize) == -1){
+			if(writen(fd_file, buf, size) == -1){
 				perror("writen");
 				if(print_flag)
 					printf("richiesta di scrittura del file <%s> su disco è fallita\n",token);
 				token = strtok_r(NULL, ",", &tmpstr);
-				free(dirfile);
 				close(fd_file);
-				free(buf);
+				//free(buf);
 				continue;
 			}
 			close(fd_file);
-			free(dirfile);
-    	}		
+    	}
+        CHECK_EQ_RETURN(closeFile(resolvedpath), -1, "closeFile arg_r", -1);
         token = strtok_r(NULL,",",&tmpstr);
-    */}
+    }
     return 0;
 }

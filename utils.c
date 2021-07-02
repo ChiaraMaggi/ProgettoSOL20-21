@@ -4,6 +4,9 @@
 #include<errno.h>
 #include<unistd.h>
 #include<sys/types.h>
+#include<fcntl.h>
+#include<limits.h>
+#include<sys/stat.h>
 
 #include "utils.h"
 
@@ -24,6 +27,44 @@ int isNumber(const char* s, long* n) {
 int isdot(const char dir[]){
     int l = strlen(dir);
     if((l>0 && dir[l-1] == '.')) return 1;
+    return 0;
+}
+
+
+int mkdir_p(const char *path){
+    const size_t len = strlen(path);
+    char _path[PATH_MAX];
+    char *p; 
+
+    errno = 0;
+
+    /* Copy string so its mutable */
+    if (len > sizeof(_path)-1) {
+        errno = ENAMETOOLONG;
+        return -1; 
+    }   
+    strcpy(_path, path);
+
+    /* Iterate the string */
+    for (p = _path + 1; *p; p++) {
+        if (*p == '/') {
+            /* Temporarily truncate */
+            *p = '\0';
+
+            if (mkdir(_path, S_IRWXU) != 0) {
+                if (errno != EEXIST)
+                    return -1; 
+            }
+
+            *p = '/';
+        }
+    }   
+
+    if (mkdir(_path, S_IRWXU) != 0) {
+        if (errno != EEXIST)
+            return -1; 
+    }   
+
     return 0;
 }
 

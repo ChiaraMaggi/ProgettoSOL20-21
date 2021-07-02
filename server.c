@@ -96,6 +96,7 @@ static void gestore_term (int signum);
 void* workerFunction(void* args);   
 int opn(type_t req, int cfd); 
 int wrt(int cfd);
+int rd(int cfd);
 int cls(int cfd);
 
 /*===================================================== MAIN ==========================================*/
@@ -200,7 +201,6 @@ int main(int argc, char* argv[]){
                 break;
             }
         }
-        printf("select si sveglia\n");
         //capiamo da chi abbiamo ricevuto una richiesta
         int cfd;
         for(int i=0; i<=max_fd; i++){
@@ -214,7 +214,6 @@ int main(int argc, char* argv[]){
                     printf("new connection accepted: client %d\n", cfd);
 
                 }else if(i == pipefd[0]){ //è una scrittura sulla pipe
-                    printf("nuova scrittura su pipe\n");
                     int fdfrompipe;
                     int len;
                     int flag;
@@ -227,7 +226,6 @@ int main(int argc, char* argv[]){
                             close(fdfrompipe); 
                             clients--;
                         }else{*/
-                        printf("fdfrompipe %d\n", fdfrompipe);
                             FD_SET(fdfrompipe, &set);
                             if(fdfrompipe > max_fd) max_fd = fdfrompipe;
                        /* }*/
@@ -236,9 +234,7 @@ int main(int argc, char* argv[]){
                         exit(EXIT_FAILURE);
                     }
                 }else{
-                    printf("new request from %d\n", i);
                     insertNode(&clientQueue, i);
-                    printf("insierito nodo %d\n", i);
                     FD_CLR(i, &set);
                 }
             }
@@ -399,7 +395,6 @@ void* workerFunction(void* args){
     int cfd;
     while(1){
         cfd = removeNode(&clientQueue);
-        printf("rimosso nodo: %d\n", cfd);
         if(cfd == -1) break;
         type_t request;
         int answer;
@@ -412,7 +407,7 @@ void* workerFunction(void* args){
                 opn(OPEN, cfd);
                 break;
             case OPENC:
-                printf("APERTURA file\n");
+                printf("APERTURA FILE\n");
                 answer = opn(OPENC, cfd);
                 break;
             case CLOSECONN:
@@ -423,25 +418,24 @@ void* workerFunction(void* args){
             case WRITE:
                 printf("SCRITTURA file\n");
                 answer = wrt(cfd);
-                printf("inviata risposta\n");
                 break;
             case APPEND:
                 break;
             case READ:
+                printf("LETTURA FILE\n");
+                answer = rd(cfd);
                 break;
             case CLOSE:
                 printf("CHIUSURA FILE\n");
                 answer = cls(cfd);
-                printf("inviata risposta\n");
                 break;
             default:
                 fprintf(stderr, "invalid request\n");
                 break;
         }
-        if(answer == -1) fprintf(stderr, "impossible to sotisfy the request %d\n", request);
+        if(answer == -1) fprintf(stderr, "impossible to satisfy the request %d\n", request);
         if(request != CLOSECONN){
             writen(pipefd[1], &cfd, sizeof(int));
-            printf("scrittura su pipe\n");
         }
     }
     return 0;
@@ -506,7 +500,6 @@ int wrt(int cfd){
         return -1;
     }
     CHECK_EQ_RETURN(readn(cfd, pathname, len*sizeof(char)), -1, "readn wrt", -1);
-    printf("%s\n", pathname);
 
     int filesize;
     CHECK_EQ_RETURN(readn(cfd, &filesize, sizeof(int)), -1, "readn wrt", -1);
@@ -574,4 +567,28 @@ int cls(int cfd){
     }
     CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen cls", -1);
     return 0;
+}
+
+int rd(int cfd){
+    int len;
+    int answer = 0;
+    CHECK_EQ_RETURN(readn(cfd, &len, sizeof(int)), -1, "readn rd", -1);
+    char* pathname = malloc(len*sizeof(char));
+    if(!pathname){
+        perror("malloc");
+        return -1;
+    }
+    CHECK_EQ_RETURN(readn(cfd, pathname, len*sizeof(char)), -1, "readn rd", -1);
+    File_t* tmp;
+    int size = -1;
+    if((tmp = icl_hash_find(storage_server, pathname) )!= NULL){
+        if(findNode(&tmp->openby, cfd) == 0){
+            size = tmp->size;
+            printf("qui\n");
+        }
+        else answer = -1;
+    }else answer = -1;
+    CHECK_EQ_RETURN(writen(cfd, &size, sizeof(int)), -1, "writen rd", -1);
+    CHECK_EQ_RETURN(writen(cfd, tmp->contenuto, tmp->size), -1, "writen rd", -1);
+    return answer;
 }

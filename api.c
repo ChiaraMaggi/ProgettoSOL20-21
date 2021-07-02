@@ -153,12 +153,11 @@ int readFile(const char* pathname, void** buf, size_t* size){
 
     int answer = -1;
     CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn readFile", -1);
-    printf("%d\n", answer);
     if(answer == -1){
         errno = ECANCELED;
         return -1;
     }
-    *buf = malloc(answer);
+    *buf = malloc(answer*sizeof(char));
     CHECK_EQ_RETURN((readn(fd_socket, *buf, sizeof(buf))), -1, "readn readFile", -1);
     *size = answer;
     return 0;
