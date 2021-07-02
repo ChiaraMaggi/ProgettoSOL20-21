@@ -5,8 +5,6 @@
  * @copyright Copyright (c) 2021
  * 
  */
-
-#define _POSIX_C_SOURCE 200112L
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
@@ -91,10 +89,14 @@ int updatemax(fd_set set, int fdmax);
 void insertNode (QueueNode_t** list, int data);  
 int removeNode (QueueNode_t** list);
 int findNode(QueueNode_t** list, int data);
+void freeFile(File_t* file);
+void removeNodeByKey(QueueNode_t** list, int data);
+int length(QueueNode_t** list);
 static void gestore_term (int signum);
 void* workerFunction(void* args);   
 int opn(type_t req, int cfd); 
 int wrt(int cfd);
+int cls(int cfd);
 
 /*===================================================== MAIN ==========================================*/
 int main(int argc, char* argv[]){
@@ -274,6 +276,18 @@ File_t* createFile(char* pathname, int fd){
     return file;
 }
 
+void freeFile(File_t* file){
+    free(file->contenuto);
+    QueueNode_t* curr = file->openby;
+    QueueNode_t* prec;
+    while(curr != NULL){
+        prec = curr;
+        curr = curr->next;
+        free(prec);
+    }
+    free(file);
+}
+
 void cleanup(Info_t* info) {
     unlink(info->socket_name);
 }
@@ -338,17 +352,37 @@ int removeNode (QueueNode_t** list) {
 }
 
 int findNode (QueueNode_t** list, int data){
-    SYSCALL_PTHREAD(pthread_mutex_lock(&lockcoda),"Lock coda");
+    //SYSCALL_PTHREAD(pthread_mutex_lock(&lockcoda),"Lock coda");
     QueueNode_t* curr = *list;
     while (curr != NULL) {
         if(curr->data == data)
             return 1;
         curr = curr->next;
     }
-    free(curr);
     //RILASCIO LOCK
-    pthread_mutex_unlock(&lockcoda);
+   // pthread_mutex_unlock(&lockcoda);
     return 0;
+}
+
+void removeNodeByKey(QueueNode_t** list, int data){
+    //PRENDO LOCK
+    //SYSCALL_PTHREAD(pthread_mutex_lock(&lockcoda),"Lock coda");
+    //ASPETTO CONDIZIONE VERIFICATA 
+    QueueNode_t* curr = *list;
+    QueueNode_t* prev = NULL;
+    while (curr != NULL) {
+        if(curr->data == data){
+            if(prev == NULL){
+                *list = curr->next;
+            }else prev->next = curr->next;
+            free(curr);
+            return;
+        }
+        prev = curr;
+        curr = curr->next;
+    }
+    //RILASCIO LOCK
+    //pthread_mutex_unlock(&lockcoda);
 }
 
 static void gestore_term (int signum) {
@@ -396,6 +430,9 @@ void* workerFunction(void* args){
             case READ:
                 break;
             case CLOSE:
+                printf("CHIUSURA FILE\n");
+                answer = cls(cfd);
+                printf("inviata risposta\n");
                 break;
             default:
                 fprintf(stderr, "invalid request\n");
@@ -408,6 +445,16 @@ void* workerFunction(void* args){
         }
     }
     return 0;
+}
+
+int length(QueueNode_t** list){
+    QueueNode_t* curr = *list;
+    int c = 0;
+    while(curr != NULL){
+        c++;
+        curr = curr->next;
+    }
+    return c;
 }
 
 int opn(type_t req, int cfd){
@@ -423,17 +470,24 @@ int opn(type_t req, int cfd){
     CHECK_EQ_RETURN((readn(cfd, pathname, len*sizeof(char))), -1, "readn opn", -1);
     printf("%s\n", pathname);
     if(req == OPENC){
-        if((tmp = icl_hash_find(storage_server, pathname)) != NULL) answer = -1;
-        else{
+        if((tmp = icl_hash_find(storage_server, pathname)) != NULL){
+            fprintf(stderr,"impossible to satisfy the request, file still in the storage\n");
+            answer = -1;
+        }else{
             if(serverstate->num_file < informations->max_file){
                 File_t* file = createFile(pathname, cfd);
                 icl_hash_insert(storage_server, pathname, file);
                 serverstate->num_file++;
+            }else{
+                //politica di rimpiazzo
             }
         }
     }
     if(req == OPEN){
-        if((tmp = icl_hash_find(storage_server, pathname)) == NULL) answer = -1;
+        if((tmp = icl_hash_find(storage_server, pathname)) == NULL){
+            fprintf(stderr, "impossible to satisfy the request, file not present in the storage\n");
+            answer = -1;
+        }
         else{
             insertNode(&tmp->openby, cfd);
         }
@@ -481,8 +535,43 @@ int wrt(int cfd){
             else{
                 //politica di rimpiazzo
             }
-        }else answer = -1;
-    }else answer = -1;
+        }else{
+            fprintf(stderr, "operation not authorized for client %d\n", cfd);
+            answer = -1;
+        }
+    }else{
+        fprintf(stderr, "file not found in the storage\n");
+        answer = -1;
+    }
     CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen wrt", -1);
+    return 0;
+}
+
+int cls(int cfd){
+    int len;
+    int answer = 0;
+    CHECK_EQ_RETURN(readn(cfd, &len, sizeof(int)), -1, "readn wrt", -1);
+    char* pathname = malloc(len*sizeof(char));
+    if(!pathname){
+        perror("malloc");
+        return -1;
+    }
+    CHECK_EQ_RETURN(readn(cfd, pathname, len*sizeof(char)), -1, "readn wrt", -1);
+    printf("%s\n", pathname);
+    
+    File_t* tmp;
+    if((tmp = icl_hash_find(storage_server, pathname))== NULL){
+        fprintf(stderr,"file not present\n");
+        return -1;
+    }else{
+        if(findNode(&tmp->openby, cfd) != 1){
+            fprintf(stderr, "the client %d doesnt't have the file open\n", cfd);
+            return -1;
+        }else{
+            removeNodeByKey(&tmp->openby, cfd);
+            printf("cfd rimosso da openby, length %d\n", length(&tmp->openby));
+        }
+    }
+    CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen cls", -1);
     return 0;
 }

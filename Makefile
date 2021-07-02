@@ -2,7 +2,7 @@
 CC = gcc
 
 # -c serve a creare i file .o senza linkarli all'eseguibile
-CFLAGS = -std=c99 -Wall -c
+CFLAGS = -std=c99 -std=gnu99 -Wall -c
 
 # questo serve a linkare la/e libreria/e all'eseguibile specificando un percorso
 # per usare questa sintassi devi chiamare la libreria lib[nome_libreria].a

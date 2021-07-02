@@ -5,7 +5,6 @@
  * @copyright Copyright (c) 2021
  * 
  */
-#define _POSIX_C_SOURCE 200112L
 #include<stdlib.h>
 #include<stdio.h>
 #include<string.h>
@@ -29,7 +28,7 @@ static int fd_socket = 0;
 struct sockaddr_un server_address;
 static int connectionOn = 0;
 
-typedef enum {OPEN, OPENC, CLOSECONN, WRITE, APPEND, READ, CLOSE}type_t;
+typedef enum {OPEN, OPENC, CLOSECONN, WRITE, APPEND, READ, CLOSE, REMOVE}type_t;
 
 /*Viene aperta una connessione AF_UNIX al socket file sockname. Se il server non accetta immediatamente la
 richiesta di connessione, la connessione da parte del client viene ripetuta dopo ‘msec’ millisecondi e fino allo
@@ -41,7 +40,6 @@ int openConnection(const char* sockname, int msec, const struct timespec abstime
         return -1;
     }
 
-    printf("trying connection\n");
     CHECK_EQ_EXIT((fd_socket=socket(AF_UNIX,SOCK_STREAM,0)), -1, "socket");
 
     /*settaggio della struttura*/
@@ -66,7 +64,6 @@ int openConnection(const char* sockname, int msec, const struct timespec abstime
         return -1;
     }
     connectionOn = 1; //connesione attiva
-    printf("connected\n");
     return 0;
 }
 
@@ -100,7 +97,7 @@ argomento che possono essere O_CREATE ed O_LOCK. Se viene passato il flag O_CREA
 memorizzato nel server, oppure il file non esiste ed il flag O_CREATE non è stato specificato, viene ritornato un
 errore. In caso di successo, il file viene sempre aperto in lettura e scrittura, ed in particolare le scritture possono
 avvenire solo in append. Se viene passato il flag O_LOCK (eventualmente in OR con O_CREATE) il file viene
-aperto e/o creato in modalità locked, che vuol dire che l’unico che può leggere o scrivere il file ‘pathname’ è il
+aperto e/o creato in modalità locked, cheCLOSE vuol dire che l’unico che può leggere o scrivere il file ‘pathname’ è il
 processo che lo ha aperto. Il flag O_LOCK può essere esplicitamente resettato utilizzando la chiamata unlockFile,
 descritta di seguito.
 Ritorna 0 in caso di successo, -1 in caso di fallimento, errno viene settato opportunamente.*/
@@ -118,15 +115,15 @@ int openFile(const char* pathname, int flags){
         request = OPEN;
     if(flags == 01)
         request = OPENC;
-    printf("comincio\n");
+
     int len = strlen(pathname)+1;
     CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen openFile", -1);    
     CHECK_EQ_RETURN((writen(fd_socket, &len, sizeof(int))), -1, "writen openFile", -1);
     CHECK_EQ_RETURN((writen(fd_socket, pathname, len*sizeof(char))), -1, "writen openFile", -1);
-    printf("ho scritto\n");
+
     int answer = -1;  //risposta server
     CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn openFile", -1);
-    printf("ricevuto risposta\n");
+
 	if(answer == -1){
 		errno = ECANCELED;
 		return -1;
@@ -147,6 +144,7 @@ int readFile(const char* pathname, void** buf, size_t* size){
         errno = ENOTCONN;
         return -1;
     }
+
     type_t request = READ;
     int len = strlen(pathname)+1;
     CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen readFile", -1);    
@@ -184,8 +182,19 @@ int writeFile(const char* pathname, const char* dirname){
         errno = EINVAL;
         return -1;
     }
+    if(dirname != NULL){
+        fprintf(stderr, "operatione -D not implemented\n");
+    }
     if (connectionOn != 1) {
         errno=ENOTCONN;
+        return -1;
+    }
+
+    //controllare se pathname esiste
+    FILE * fd_file;
+    int file_size;
+    if ((fd_file = fopen(pathname,"rb")) == NULL) {
+        errno = ENOENT;
         return -1;
     }
 
@@ -194,13 +203,6 @@ int writeFile(const char* pathname, const char* dirname){
     CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen writeFile", -1);  
     CHECK_EQ_RETURN((writen(fd_socket, &len, sizeof(int))), -1, "writen readFile", -1);
     CHECK_EQ_RETURN((writen(fd_socket, pathname, len*sizeof(char))), -1, "writen readFile", -1);
-  
-    FILE * fd_file;
-    int file_size;
-    if ((fd_file = fopen(pathname,"rb")) == NULL) {
-        errno = ENOENT;
-        return -1;
-    }
 
     int answer = -1;
 
@@ -240,6 +242,9 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
     if(!pathname){
         errno = EINVAL;
         return -1;
+    }
+    if(dirname != NULL){
+        fprintf(stderr, "operatione -D not implemented\n");
     }
     if(connectionOn != 1){
         errno = ENOTCONN;
@@ -292,7 +297,7 @@ int closeFile(const char* pathname){
     type_t request = CLOSE;
     int len = strlen(pathname);
     CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen closeFile", -1);    
-    CHECK_EQ_RETURN((writen(fd_socket, &len, sizeof(int))), -1, "writen closeFIle", -1);
+    CHECK_EQ_RETURN((writen(fd_socket, &len, sizeof(int))), -1, "writen closeFile", -1);
     CHECK_EQ_RETURN((writen(fd_socket, pathname, len*sizeof(char))), -1, "writen closeFile", -1);
 
     int answer = -1;
@@ -307,6 +312,27 @@ int closeFile(const char* pathname){
 /*Rimuove il file cancellandolo dal file storage server. L’operazione fallisce se il file non è in stato locked, o è in
 stato locked da parte di un processo client diverso da chi effettua la removeFile.*/
 int removeFile(const char* pathname){
-    errno = ENOTSUP;
+    if(!pathname){
+        errno = EINVAL;
+        return -1;
+    }
+    if(connectionOn != 1){
+        errno = ENOTCONN;
+        return -1;
+    }
+    type_t request = REMOVE;
+    int len = strlen(pathname);
+    CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(type_t))), -1, "writen removeFile", -1);    
+    CHECK_EQ_RETURN((writen(fd_socket, &len, sizeof(int))), -1, "writen removeFile", -1);
+    CHECK_EQ_RETURN((writen(fd_socket, pathname, len*sizeof(char))), -1, "writen removeFIle", -1);
+
+    int answer = -1;
+    CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn closeFile", -1);
+    if(answer == -1){
+        errno = ECANCELED;
+        return -1;
+    }
+    return 0;
+
     return -1;
 }

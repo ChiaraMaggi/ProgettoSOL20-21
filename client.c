@@ -5,8 +5,6 @@
  * @copyright Copyright (c) 2021
  * 
  */
-
-#define _POSIX_C_SOURCE 200112L
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
@@ -20,6 +18,8 @@
 #include<time.h>
 #include<sys/stat.h>
 #include<dirent.h>
+#include<limits.h>
+#include <libgen.h>
 
 #include "parsing.h"
 #include "utils.h"
@@ -31,42 +31,88 @@
 
 static char socketname[100];
 
-void arg_f(char* s_name);
+int arg_f(char* s_name);
 int parse_w(char* optarg, char* dirname, long* filetoSend);
 int arg_w(char* dirname, long* fileToSend);
+int arg_W(char* optarg);
+int arg_r(char* optarg, char* dir);
 
 int main(int argc, char* argv[]){
     if(argc == 1){
         printf("One command is necessary: use -h for see the options\n");
         return 0;
     }
+    int flag_h=0, flag_p=0, flag_d=0, flag_r=0, flag_R=0, flag_f=0, print_flag=0;
+    char* dir = NULL;
+
+    for(int i=0; i<argc; i++){
+        if(strcmp(argv[i], "-h") == 0) flag_h = i;
+        if(strcmp(argv[i], "-p") == 0) flag_p = i;
+        if(strcmp(argv[i], "-d") == 0) flag_d = i;
+        if(strcmp(argv[i], "-r") == 0) flag_r = i;
+        if(strcmp(argv[i], "-R") == 0) flag_R = i;
+        if(strcmp(argv[i], "-f") == 0) flag_f = i;
+    }
+    if(flag_h > 0){
+        printf("-f filesocketname\n-w dirname[,n=0]\n-W file1[,file2]\n-r file1[,file2]\n-R [n=0]\n-d dirname\n-t time\n-l file1[,file2]\n-u file1[,file2]\n-c file1[,file2]\n-p\n");
+        return 0;
+    }
+
+    if(flag_p > 0)
+        print_flag = 1;
+    
+    if(flag_d > 0){
+        if(flag_r == 0 && flag_R == 0){
+            fprintf(stderr, "Must be operation -r or -R with operation -d\n");
+            return 0;
+        }else{
+            dir = malloc((strlen(argv[flag_d+1])+1)*sizeof(char));
+            strcpy(dir, argv[flag_d+1]);
+        }   
+    }
+
+    if(flag_f > 0){
+        if(arg_f(argv[flag_f+1]) == -1){
+            fprintf(stderr, "Connection failed\n");
+            return 0;
+        }else{
+            fprintf(stdout, "Connected correctly\n");
+        }
+    }else{
+        fprintf(stderr, "Impossible to satisfy the request if the name of socket is not declared\n");
+        return 0;
+    }
+
     int opt; 
-    void** buf = malloc(sizeof(buf));
     size_t size;
-    while((opt = getopt(argc, argv, ":hf:w:W:r:R:d:t:l:u:c:p")) != -1){ //opstring contine le opzioni che vogliamo gestire
+    while((opt = getopt(argc, argv, ":hf:w:W:D:r:R:d:t:l:u:c:p")) != -1){ //opstring contine le opzioni che vogliamo gestire
         //se getop trova una delle opzioni ritrona un intero (relativo al carattere letto) quindi posso fare lo switch
         char dir[MAX_DIR_LEN];
         long numFileToSend;
         switch(opt){
             case 'h':
-                printf("-f filesocketname\n-w dirname[,n=0]\n-W file1[,file2]\n-r file1[,file2]\n-R [n=0]\n-d dirname\n-t time\n-l file1[,file2]\n-u file1[,file2]\n-c file1[,file2]\n-p\n");
-                return 0; //optarg = variabile che setta getopt all'argomento dell'opzione
+                break;
             case 'f':
-                arg_f(optarg);
                 break;
             case 'w':
                 if(parse_w(optarg, dir, &numFileToSend) == -1){
-                    fprintf(stderr, "impossible to parse -w correctly\n");
+                    fprintf(stderr, "Impossible to parse -w correctly\n");
                     break;
                 }
                 if(arg_w(dir, &numFileToSend) == -1){
-                    fprintf(stderr, "operation -w doesn't end correctly\n");
-                    break;
+                    fprintf(stderr, "Operation -w doesn't end correctly\n");
                 }
                 break;
             case 'W':
+                if(arg_W(optarg) == -1){
+                    fprintf(stderr, "Operation -W doean't end correctly\n");
+                }
                 break; 
+            case 'D':
+                fprintf(stderr, "Operation -D not supported\n");
+                break;
             case 'r':
+                arg_r(optarg, dir);
                 break;
             case 'R':
                 break;
@@ -75,8 +121,10 @@ int main(int argc, char* argv[]){
             case 't':
                 break;
             case 'l':   
+                fprintf(stderr, "Operation -l not supported\n");
                 break;
             case 'u':
+                fprintf(stderr, "Operation -u not supported\n");
                 break;
             case 'c':
                 break;
@@ -106,12 +154,13 @@ int main(int argc, char* argv[]){
     return 0;
 }
 
-void arg_f(char* s_name){
+int arg_f(char* s_name){
     strcpy(socketname, s_name);
     struct timespec abstime;
     clock_gettime(CLOCK_REALTIME, &abstime);
     abstime.tv_sec += 5;
-    if(openConnection(socketname, 2000, abstime) == -1) perror("ERROR opening connection");
+    CHECK_EQ_RETURN(openConnection(socketname, 2000, abstime), -1, "Opening connection", -1);
+    return 0;
 }
 
 int parse_w(char* optarg, char* dirname, long* fileToSend){
@@ -123,14 +172,11 @@ int parse_w(char* optarg, char* dirname, long* fileToSend){
     while(optarg[i] != '\0' && optarg[i] != ',')    i++;
     if(optarg[i] == '\0')   strncpy(dirname, optarg, i+1);
     else{
-        strncpy(dirname, optarg, i);
-        if(optarg[i+1] != 'n' || optarg[i+2] != '='){
-            fprintf(stderr, "usage: -w dirname[,n=0]\n");
-            return -1;
-        }    
-        char* numFile = malloc(sizeof(char)*(strlen(optarg) - i));
-        i = i+3; //arrivo al punto dopo '='
+        strncpy(dirname, optarg, i);  
+        printf("%s\n", dirname); 
+        char* numFile = malloc(sizeof(char)*(strlen(optarg) - i+1));
         int j = 0;
+        i++;
         while(optarg[i] != '\0'){
             numFile[j] = optarg[i];
             j++;
@@ -148,7 +194,6 @@ int arg_w(char* dirname, long* fileToSend){
     //controllo se dirname è effettivamente una directory
     struct stat statbuf;
     int r;
-    //gestione errore, avrei potuto farla anche con la macro SYSCALL_EXIT contenuta in utilis
     CHECK_EQ_EXIT((r = stat(dirname, &statbuf)), -1, "stat");
     if(!S_ISDIR(statbuf.st_mode)){
         printf("%s is not a directory\n", dirname);
@@ -160,6 +205,8 @@ int arg_w(char* dirname, long* fileToSend){
     //printf("Directory %s:\n", dirname);
     CHECK_EQ_RETURN((dir = opendir(dirname)), NULL, "opendir", -1);
     struct dirent* file;
+
+    //se n=0????
     while(*fileToSend != 0 && (errno = 0, file = readdir(dir)) != NULL){
         printf("entro\n");
         struct stat statebuf;
@@ -183,12 +230,15 @@ int arg_w(char* dirname, long* fileToSend){
                 if(ret == -1) return -1;
             }
         }else{
-            printf("%s\n", filename);
-            CHECK_EQ_RETURN(openFile(filename, O_CREATE), -1, "openFile", -1);
+            char resolvedpath[PATH_MAX];
+            char* res;
+            CHECK_EQ_RETURN((res = realpath(filename, resolvedpath)), NULL, "realpath", -1);
+            printf("%s\n", resolvedpath);
+            CHECK_EQ_RETURN(openFile(resolvedpath, O_CREATE), -1, "openFile arg_w", -1);
             printf("file creato\n");
-            CHECK_EQ_RETURN(writeFile(filename, NULL), -1, "writeFile", -1);
+            //CHECK_EQ_RETURN(writeFile(resolvedpath, NULL), -1, "writeFile arg_w", -1);
             printf("file scritto\n");
-            // CHECK_EQ_RETURN(closeFile(filename), -1, "closeFile", -1);
+            CHECK_EQ_RETURN(closeFile(resolvedpath), -1, "closeFile arg_w", -1);
             *fileToSend = *fileToSend - 1;
         }
     }
@@ -197,4 +247,92 @@ int arg_w(char* dirname, long* fileToSend){
     return 0;
 }
 
+int arg_W(char* optarg){
+    char* tmpstr;
+    char* token = strtok_r(optarg, ",", &tmpstr);
+    char resolvedpath[PATH_MAX];
+    while(token){
+        char* file = token;
+        char* res;
+        CHECK_EQ_RETURN((res = realpath(file, resolvedpath)), NULL, "realpath arg_W", -1);
+        //printf("%s\n",resolvedpath);
+        struct stat info_file;
+        stat(resolvedpath, &info_file);
+        if (S_ISREG(info_file.st_mode)) {
+            CHECK_EQ_RETURN(openFile(token, O_CREATE), -1, "openFile arg_W", -1);
+            CHECK_EQ_RETURN(writeFile(token, NULL), -1, "writeFile arg_W", -1);
+            CHECK_EQ_RETURN(closeFile(token), -1, "closeFile arg_W", -1);
+        }
+        token = strtok_r(NULL, ",", &tmpstr);
+    }
+    return 0;
+}
 
+int arg_r(char* optarg, char* dir){
+    char* tmpstr;
+    char* token = strtok_r(optarg, ",", &tmpstr);
+    char resolvedpath[PATH_MAX];
+    while(token){
+        char* file = token;
+        char* res;
+        CHECK_EQ_RETURN((res = realpath(file, resolvedpath)), NULL, "realpath arg_r", -1);
+        CHECK_EQ_RETURN(openFile(resolvedpath, 0), -1, "openFile arg_r", -1);
+
+        //READ FILE
+        char * buf = NULL;
+        size_t size;
+       /* CHECK_EQ_RETURN(readFile(resolvedpath,(void**)&buf,&size), -1, "readFile arg_r", -1);
+        if(dir != NULL  && buf!= NULL && filesize != -1){
+			int fd_file;
+		    char str[10];
+			
+			char namefile[40] = {'f','i','l','e'};
+			if(sprintf(str, "%d", n) <0){
+				token = strtok_r(NULL, ",", &tmpstr);
+				free(buf);
+				continue;
+			}
+
+			strncat(namefile,str,strlen(str));
+
+			char* dirfile = malloc(len+strlen(namefile));
+			if(!dirfile){
+				token = strtok_r(NULL, ",", &tmpstr);
+				free(dirfile);
+				free(buf);
+				continue;
+			}
+			memset(dirfile,'\0',len);
+
+			strncpy(dirfile,dirname,len);
+
+			strncat(dirfile, namefile, strlen(namefile));
+			n++;
+
+			if((fd_file = open(dirfile, O_CREAT|O_WRONLY, 0666)) == -1){
+				perror("open");
+				if(print_flag)
+					printf("richiesta di scrittura del file <%s> su disco è fallita\n",token);
+				token = strtok_r(NULL, ",", &tmpstr);
+				free(dirfile);
+				free(buf);
+				continue;
+			}
+
+			if(writen(fd_file, buf, filesize) == -1){
+				perror("writen");
+				if(print_flag)
+					printf("richiesta di scrittura del file <%s> su disco è fallita\n",token);
+				token = strtok_r(NULL, ",", &tmpstr);
+				free(dirfile);
+				close(fd_file);
+				free(buf);
+				continue;
+			}
+			close(fd_file);
+			free(dirfile);
+    	}		
+        token = strtok_r(NULL,",",&tmpstr);
+    */}
+    return 0;
+}
