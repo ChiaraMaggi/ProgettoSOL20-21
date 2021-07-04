@@ -34,6 +34,7 @@
 static char socketname[100];
 static int print_flag = 0;
 
+
 int arg_f(char* s_name);
 int parse_w(char* optarg, char* dirname, long* filetoSend);
 int arg_w(char* dirname, long* fileToSend);
@@ -46,7 +47,7 @@ int main(int argc, char* argv[]){
         return 0;
     }
     int flag_h=0, flag_p=0, flag_d=0, flag_r=0, flag_R=0, flag_f=0;
-    char* dir = NULL;
+    char* dir_r = NULL;
 
     for(int i=0; i<argc; i++){
         if(strcmp(argv[i], "-h") == 0) flag_h = i;
@@ -69,8 +70,8 @@ int main(int argc, char* argv[]){
             fprintf(stderr, "Must be operation -r or -R with operation -d\n");
             return 0;
         }else{
-            dir = malloc((strlen(argv[flag_d+1])+1)*sizeof(char));
-            strcpy(dir, argv[flag_d+1]);
+            dir_r = malloc((strlen(argv[flag_d+1])+1)*sizeof(char));
+            strcpy(dir_r, argv[flag_d+1]);
         }   
     }
 
@@ -90,7 +91,7 @@ int main(int argc, char* argv[]){
     size_t size;
     while((opt = getopt(argc, argv, ":hf:w:W:D:r:R:d:t:l:u:c:p")) != -1){ //opstring contine le opzioni che vogliamo gestire
         //se getop trova una delle opzioni ritrona un intero (relativo al carattere letto) quindi posso fare lo switch
-        char dir[MAX_DIR_LEN];
+        char dir_w[MAX_DIR_LEN];
         long numFileToSend;
         switch(opt){
             case 'h':
@@ -98,11 +99,11 @@ int main(int argc, char* argv[]){
             case 'f':
                 break;
             case 'w':
-                if(parse_w(optarg, dir, &numFileToSend) == -1){
+                if(parse_w(optarg, dir_w, &numFileToSend) == -1){
                     fprintf(stderr, "Impossible to parse -w correctly\n");
                     break;
                 }
-                if(arg_w(dir, &numFileToSend) == -1){
+                if(arg_w(dir_w, &numFileToSend) == -1){
                     fprintf(stderr, "Operation -w doesn't end correctly\n");
                 }
                 break;
@@ -115,7 +116,7 @@ int main(int argc, char* argv[]){
                 fprintf(stderr, "Operation -D not supported\n");
                 break;
             case 'r':
-                arg_r(optarg, dir);
+                arg_r(optarg, dir_r);
                 break;
             case 'R':
                 break;
@@ -282,28 +283,30 @@ int arg_r(char* optarg, char* dir){
             char path[PATH_MAX];
             sprintf(path, "%s/%s", dir, filename);
             int fd_file;
-            int check = mkdir_p(dir);
-            if(check == 0) printf("cartella creata\n");
-            else printf("cartella non creata\n");
-            //CREA FILE SE NON ESISTE
-            if((fd_file = open(path, O_CREAT|O_WRONLY, 0666)) == -1){
-				perror("open");
-				if(print_flag)
-					printf("richiesta di scrittura del file <%s> su disco è fallita\n",token);
-				token = strtok_r(NULL, ",", &tmpstr);
-				//free(buf);
-				continue;
-			}
+            if(mkdir(dir, 0777) != 0){
+                perror("mkdir");
 
-			if(writen(fd_file, buf, size) == -1){
-				perror("writen");
-				if(print_flag)
-					printf("richiesta di scrittura del file <%s> su disco è fallita\n",token);
-				token = strtok_r(NULL, ",", &tmpstr);
-				close(fd_file);
-				//free(buf);
-				continue;
-			}
+            }else{
+                //CREA FILE SE NON ESISTE
+                if((fd_file = open(path, O_CREAT|O_WRONLY, 0666)) == -1){
+                    perror("open");
+                    if(print_flag)
+                        printf("richiesta di scrittura del file <%s> su disco è fallita\n",token);
+                    token = strtok_r(NULL, ",", &tmpstr);
+                    //free(buf);
+                    continue;
+                }
+
+                if(writen(fd_file, buf, size) == -1){
+                    perror("writen");
+                    if(print_flag)
+                        printf("richiesta di scrittura del file <%s> su disco è fallita\n",token);
+                    token = strtok_r(NULL, ",", &tmpstr);
+                    close(fd_file);
+                    //free(buf);
+                    continue;
+                }
+            }
 			close(fd_file);
     	}
         CHECK_EQ_RETURN(closeFile(resolvedpath), -1, "closeFile arg_r", -1);
