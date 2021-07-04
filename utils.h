@@ -11,6 +11,7 @@
 
 #define UNIX_PATH_MAX 108
 #define SOMAXCON 100
+#define MAX_DIM 500
 
 // macro di utilità per controllare errori
 #define CHECK_EQ_EXIT(X, val, str) \
@@ -98,6 +99,14 @@
  * @brief Controlla se la stringa passata come primo argomento e' un numero.
  * @return  0 ok  1 non e' un numbero   2 overflow/underflow
  */
+
+typedef enum {OPEN, OPENC, CLOSECONN, WRITE, APPEND, READ, CLOSE, REMOVE}type_t;
+
+typedef struct request{
+    type_t req;
+    char pathname[MAX_DIM];
+} request_t;
+
 int isNumber(const char*, long*);
 
 int isdot(const char dir[]);
