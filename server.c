@@ -413,7 +413,7 @@ void* workerFunction(void* args){
         if(readn(cfd, &request, sizeof(request_t)) == -1){
             request.req = -1;
         }
-        printf("REQUEST: %d\n", request.req);
+        printf("REQUEST: %d eseguita da worker %lu\n", request.req, pthread_self());
         switch (request.req){
             case OPEN:
                 printf("APERTURA FILE\n");
@@ -424,7 +424,7 @@ void* workerFunction(void* args){
                 answer = opn(OPENC, cfd, request.pathname);
                 break;
             case CLOSECONN:
-                answer = 0;
+                printf("CHIUSURA CONNESSIONE\n");
                 writen(cfd, &answer, sizeof(int));
                 close(cfd);
                 break;

@@ -73,8 +73,10 @@ int closeConnection(const char* sockname){
         return -1;
     }
     if(strncmp(server_address.sun_path, sockname, strlen(sockname)+1) ==  0){
-        type_t request = CLOSECONN;
-        CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(size_t))), -1, "writen closeConnection", -1);
+        request_t request;
+        request.req = CLOSECONN;
+        strcpy(request.pathname, sockname);
+        CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(request_t))), -1, "writen closeConnection", -1);
     
         int answer = -1;
     	CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn closeConnection", -1);
@@ -143,9 +145,8 @@ int readFile(const char* pathname, void** buf, size_t* size){
         return -1;
     }
 
-    type_t req = READ;
     request_t request;
-    request.req = req;
+    request.req = READ;
     strcpy(request.pathname, pathname);
     CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(request_t))), -1, "writen readFile", -1);
     int answer = -1;
@@ -195,9 +196,8 @@ int writeFile(const char* pathname, const char* dirname){
         return -1;
     }
 
-    type_t req = WRITE;
     request_t request;
-    request.req = req;
+    request.req = WRITE;
     strcpy(request.pathname, pathname);
     CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(request_t))), -1, "writen writeFile", -1);
 
@@ -245,15 +245,11 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
         errno = ENOTCONN;
         return -1;
     }
-    type_t req;
-    if(dirname == NULL) req = APPEND;  
-    else{
-        fprintf(stderr, "operatione -D not implemented\n");
-        req = APPEND;
-    }
+    
+    if(dirname != NULL) fprintf(stderr, "operatione -D not implemented\n"); 
 
     request_t request;
-    request.req = req;
+    request.req = APPEND;
     strcpy(request.pathname, pathname);
     CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(request_t))), -1, "writen appendToFile", -1);
 
@@ -291,9 +287,9 @@ int closeFile(const char* pathname){
         errno = ENOTCONN;
         return -1;
     }
-    type_t req = CLOSE;
+    
     request_t request;
-    request.req = req;
+    request.req = CLOSE;
     strcpy(request.pathname, pathname);
     CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(request_t))), -1, "writen closeFiles", -1);
 
@@ -317,9 +313,9 @@ int removeFile(const char* pathname){
         errno = ENOTCONN;
         return -1;
     }
-    type_t req = REMOVE;
+
     request_t request;
-    request.req = req;
+    request.req = REMOVE;
     strcpy(request.pathname, pathname);
     CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(request_t))), -1, "writen removeFile", -1);
 

@@ -150,11 +150,10 @@ int main(int argc, char* argv[]){
             default:;
         }
     }
-    sleep(10);/*
     if(closeConnection("SOLsocket.sk") == -1){
         perror("ERROR closing connection");
         return (EXIT_FAILURE);
-    }*/
+    }
     return 0;
 }
 
@@ -283,29 +282,25 @@ int arg_r(char* optarg, char* dir){
             char path[PATH_MAX];
             sprintf(path, "%s/%s", dir, filename);
             int fd_file;
-            if(mkdir(dir, 0777) != 0){
-                perror("mkdir");
+            mkdir(dir, 0777);
+            //CREA FILE SE NON ESISTE
+            if((fd_file = open(path, O_CREAT|O_WRONLY, 0666)) == -1){
+                perror("open");
+                if(print_flag)
+                    printf("richiesta di scrittura del file <%s> su disco è fallita\n",token);
+                token = strtok_r(NULL, ",", &tmpstr);
+                //free(buf);
+                continue;
+            }
 
-            }else{
-                //CREA FILE SE NON ESISTE
-                if((fd_file = open(path, O_CREAT|O_WRONLY, 0666)) == -1){
-                    perror("open");
-                    if(print_flag)
-                        printf("richiesta di scrittura del file <%s> su disco è fallita\n",token);
-                    token = strtok_r(NULL, ",", &tmpstr);
-                    //free(buf);
-                    continue;
-                }
-
-                if(writen(fd_file, buf, size) == -1){
-                    perror("writen");
-                    if(print_flag)
-                        printf("richiesta di scrittura del file <%s> su disco è fallita\n",token);
-                    token = strtok_r(NULL, ",", &tmpstr);
-                    close(fd_file);
-                    //free(buf);
-                    continue;
-                }
+            if(writen(fd_file, buf, size) == -1){
+                perror("writen");
+                if(print_flag)
+                    printf("richiesta di scrittura del file <%s> su disco è fallita\n",token);
+                token = strtok_r(NULL, ",", &tmpstr);
+                close(fd_file);
+                //free(buf);
+                continue;
             }
 			close(fd_file);
     	}
