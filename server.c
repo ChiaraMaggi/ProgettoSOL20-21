@@ -346,16 +346,18 @@ int removeNode (QueueNode_t** list) {
 }
 
 int findNode (QueueNode_t** list, int data){
-    //SYSCALL_PTHREAD(pthread_mutex_lock(&lockcoda),"Lock coda");
+    SYSCALL_PTHREAD(pthread_mutex_lock(&lockcoda),"Lock coda");
     QueueNode_t* curr = *list;
     while (curr != NULL) {
-        if(curr->data == data)
-            return 1;
+        if(curr->data == data){
+            pthread_mutex_unlock(&lockcoda);
+            return 0;
+        }
         curr = curr->next;
     }
     //RILASCIO LOCK
-   // pthread_mutex_unlock(&lockcoda);
-    return 0;
+    pthread_mutex_unlock(&lockcoda);
+    return -1;
 }
 
 void removeNodeByKey(QueueNode_t** list, int data){
@@ -370,6 +372,7 @@ void removeNodeByKey(QueueNode_t** list, int data){
                 *list = curr->next;
             }else prev->next = curr->next;
             free(curr);
+            pthread_mutex_unlock(&lockcoda);
             return;
         }
         prev = curr;
@@ -499,7 +502,7 @@ int wrt(int cfd, char pathname[]){
     File_t* tmp;
     if((tmp = icl_hash_find(storage_server, pathname)) != NULL){
         int flag = findNode(&tmp->openby, cfd);
-        if(tmp->fdcreator == cfd && tmp->operationdonebycreator == 1 && flag){ //controllo che sia il creatore e abbia fatto come ultima operazione openFile con O_CREATE
+        if(tmp->fdcreator == cfd && tmp->operationdonebycreator == 1 && flag == 0){ //controllo che sia il creatore e abbia fatto come ultima operazione openFile con O_CREATE
             if(serverstate->free_space >= filesize){
                 tmp->size = filesize;
                 tmp->contenuto = malloc(filesize*sizeof(char));
@@ -531,7 +534,7 @@ int cls(int cfd, char pathname[]){
         fprintf(stderr,"file not present\n");
         answer = -1;
     }else{
-        if(findNode(&tmp->openby, cfd) != 1){
+        if(findNode(&tmp->openby, cfd) == -1){
             fprintf(stderr, "the client %d doesnt't have the file open\n", cfd);
             answer = -1;
         }else{

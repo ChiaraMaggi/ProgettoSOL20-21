@@ -233,7 +233,7 @@ int arg_w(char* dirname, long* fileToSend){
             CHECK_EQ_RETURN((res = realpath(filename, resolvedpath)), NULL, "realpath", -1);
             CHECK_EQ_RETURN(openFile(resolvedpath, O_CREATE), -1, "openFile arg_w", -1);
             CHECK_EQ_RETURN(writeFile(resolvedpath, NULL), -1, "writeFile arg_w", -1);
-            //CHECK_EQ_RETURN(closeFile(resolvedpath), -1, "closeFile arg_w", -1);
+            CHECK_EQ_RETURN(closeFile(resolvedpath), -1, "closeFile arg_w", -1);
             *fileToSend = *fileToSend - 1;
         }
     }
@@ -306,7 +306,7 @@ int arg_r(char* optarg, char* dir){
 			}
 			close(fd_file);
     	}
-        //CHECK_EQ_RETURN(closeFile(resolvedpath), -1, "closeFile arg_r", -1);
+        CHECK_EQ_RETURN(closeFile(resolvedpath), -1, "closeFile arg_r", -1);
         token = strtok_r(NULL,",",&tmpstr);
     }
     return 0;
