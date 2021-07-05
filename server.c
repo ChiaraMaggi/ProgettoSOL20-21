@@ -80,13 +80,13 @@ pthread_cond_t notempty = PTHREAD_COND_INITIALIZER;
 /*=================================== FUNZIONI UTILI ====================================================*/
 void setDefault(Info_t* info);
 Serverstate_t* initServerstate(long size);
-File_t* createFile(char* pathname, int fd);
+File_t* createFile(int fd);
 void cleanup(Info_t* info);
 int updatemax(fd_set set, int fdmax); 
 void insertNode (QueueNode_t** list, int data);  
 int removeNode (QueueNode_t** list);
 int findNode(QueueNode_t** list, int data);
-void freeFile(File_t* file);
+void freeFile(void* file);
 void removeNodeByKey(QueueNode_t** list, int data);
 int length(QueueNode_t** list);
 static void gestore_term (int signum);
@@ -95,6 +95,7 @@ int opn(type_t req, int cfd, char pathname[]);
 int wrt(int cfd, char pathname[]);
 int rd(int cfd, char pathname[]);
 int cls(int cfd, char pathname[]);
+int rm(int cfd, char pathname[]);
 
 /*===================================================== MAIN ==========================================*/
 int main(int argc, char* argv[]){
@@ -260,7 +261,7 @@ Serverstate_t* initServerstate(long size){
     return serverstate;
 }
 
-File_t* createFile(char* pathname, int fd){
+File_t* createFile(int fd){
     File_t* file = malloc(sizeof(File_t));
     file->fdcreator = fd;
     file->operationdonebycreator++;
@@ -270,9 +271,10 @@ File_t* createFile(char* pathname, int fd){
     return file;
 }
 
-void freeFile(File_t* file){
-    free(file->contenuto);
-    QueueNode_t* curr = file->openby;
+void freeFile(void* file){
+    File_t* data = file;
+    free(data->contenuto);
+    QueueNode_t* curr = data->openby;
     QueueNode_t* prec;
     while(curr != NULL){
         prec = curr;
@@ -442,6 +444,10 @@ void* workerFunction(void* args){
                 printf("CHIUSURA FILE\n");
                 answer = cls(cfd, request.pathname);
                 break;
+            case REMOVE:
+                printf("RIMOZIONE FILE\n");
+                answer = rm(cfd, request.pathname);
+                break;
             default:
                 fprintf(stderr, "invalid request\n");
                 break;
@@ -455,6 +461,7 @@ void* workerFunction(void* args){
 }
 
 int opn(type_t req, int cfd, char pathname[]){
+    printf("%s\n", pathname);
     int answer = 0;
     File_t* tmp;
     if(req == OPENC){
@@ -463,9 +470,8 @@ int opn(type_t req, int cfd, char pathname[]){
             answer = -1;
         }else{
             if(serverstate->num_file < informations->max_file){
-                File_t* file = createFile(pathname, cfd);
+                File_t* file = createFile(cfd);
                 icl_hash_insert(storage_server, pathname, file);
-                //printf("%d\n", storage_server->nentries);
                 serverstate->num_file++;
             }else{
                 //politica di rimpiazzo
@@ -482,6 +488,10 @@ int opn(type_t req, int cfd, char pathname[]){
         }
     }
     CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen opn", -1);
+    FILE* f;
+    f = fopen("hashtable.txt", "w+");
+    icl_hash_dump(f, storage_server);
+    fclose(f);
     return 0;
 }
 
@@ -536,13 +546,15 @@ int cls(int cfd, char pathname[]){
     }else{
         if(findNode(&tmp->openby, cfd) == -1){
             fprintf(stderr, "the client %d doesnt't have the file open\n", cfd);
+            freeFile(tmp);
             answer = -1;
         }else{
             removeNodeByKey(&tmp->openby, cfd);
+            freeFile(tmp);
         }
     }
     CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen cls", -1);
-    return 0;
+    return answer;
 }
 
 int rd(int cfd, char pathname[]){
@@ -557,5 +569,23 @@ int rd(int cfd, char pathname[]){
     }else answer = -1;
     CHECK_EQ_RETURN(writen(cfd, &size, sizeof(int)), -1, "writen rd", -1);
     CHECK_EQ_RETURN(writen(cfd, tmp->contenuto, tmp->size), -1, "writen rd", -1);
+    return answer;
+}
+
+int rm(int cfd, char pathname[]){
+    int answer = 0;
+    File_t* tmp;
+    FILE* f;
+    f = fopen("hashtable.txt", "w+");
+    icl_hash_dump(f, storage_server);
+    fclose(f);
+    if((tmp = icl_hash_find(storage_server, pathname)) == NULL){
+        fprintf(stderr,"file not present\n");
+        answer = -1;
+    }else{
+        if(icl_hash_delete(storage_server, pathname, free, freeFile) == -1)
+            printf("non riesco a rimuovere\n");
+    }
+    CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen rm", -1);
     return answer;
 }

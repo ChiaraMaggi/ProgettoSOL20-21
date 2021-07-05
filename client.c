@@ -40,6 +40,7 @@ int parse_w(char* optarg, char* dirname, long* filetoSend);
 int arg_w(char* dirname, long* fileToSend);
 int arg_W(char* optarg);
 int arg_r(char* optarg, char* dir);
+int arg_c(char* optarg);
 
 int main(int argc, char* argv[]){
     if(argc == 1){
@@ -116,7 +117,8 @@ int main(int argc, char* argv[]){
                 fprintf(stderr, "Operation -D not supported\n");
                 break;
             case 'r':
-                arg_r(optarg, dir_r);
+                if(arg_r(optarg, dir_r) == -1)
+                    fprintf(stderr, "Operation -r doesn't end correctly\n");
                 break;
             case 'R':
                 break;
@@ -131,6 +133,8 @@ int main(int argc, char* argv[]){
                 fprintf(stderr, "Operation -u not supported\n");
                 break;
             case 'c':
+                if(arg_c(optarg) == -1)
+                    fprintf(stderr, "Operation -c doesn't end correctly\n");
                 break;
             case 'p':
                 break;
@@ -173,7 +177,10 @@ int parse_w(char* optarg, char* dirname, long* fileToSend){
     }
     int i=0;
     while(optarg[i] != '\0' && optarg[i] != ',')    i++;
-    if(optarg[i] == '\0')   strncpy(dirname, optarg, i+1);
+    if(optarg[i] == '\0'){
+        strncpy(dirname, optarg, i+1);
+        *fileToSend = LONG_MAX;
+    }
     else{
         strncpy(dirname, optarg, i);  
         char* numFile = malloc(sizeof(char)*(strlen(optarg) - i+1));
@@ -206,7 +213,6 @@ int arg_w(char* dirname, long* fileToSend){
     CHECK_EQ_RETURN((dir = opendir(dirname)), NULL, "opendir", -1);
     struct dirent* file;
 
-    //se n=0????
     while(*fileToSend != 0 && (errno = 0, file = readdir(dir)) != NULL){
         struct stat statebuf;
         char filename[MAX_LEN]; 
@@ -237,6 +243,7 @@ int arg_w(char* dirname, long* fileToSend){
             *fileToSend = *fileToSend - 1;
         }
     }
+    
     if(errno != 0) perror("readdir");
     closedir(dir);
     return 0;
@@ -255,6 +262,7 @@ int arg_W(char* optarg){
         stat(resolvedpath, &info_file);
         if (S_ISREG(info_file.st_mode)) {
             CHECK_EQ_RETURN(openFile(resolvedpath, O_CREATE), -1, "openFile arg_W", -1);
+            printf("%s\n", resolvedpath);
             CHECK_EQ_RETURN(writeFile(resolvedpath, NULL), -1, "writeFile arg_W", -1);
             CHECK_EQ_RETURN(closeFile(resolvedpath), -1, "closeFile arg_W", -1);
         }
@@ -306,6 +314,21 @@ int arg_r(char* optarg, char* dir){
     	}
         CHECK_EQ_RETURN(closeFile(resolvedpath), -1, "closeFile arg_r", -1);
         token = strtok_r(NULL,",",&tmpstr);
+    }
+    return 0;
+}
+
+int arg_c(char* optarg){
+    char* tmpstr;
+    char* token = strtok_r(optarg, ",", &tmpstr);
+    char resolvedpath[PATH_MAX];
+    while(token){
+        char* file = token;
+        char* res;
+        CHECK_EQ_RETURN((res = realpath(file, resolvedpath)), NULL, "realpath arg_c", -1);
+        printf("%s\n", resolvedpath);
+        CHECK_EQ_RETURN(removeFile(resolvedpath), -1, "removeFile arg_c", -1);
+        token = strtok_r(NULL, ",", &tmpstr);
     }
     return 0;
 }
