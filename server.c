@@ -488,16 +488,11 @@ int opn(type_t req, int cfd, char pathname[]){
         }
     }
     CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen opn", -1);
-    FILE* f;
-    f = fopen("hashtable.txt", "w+");
-    icl_hash_dump(f, storage_server);
-    fclose(f);
-    return 0;
+    return answer;
 }
 
 int wrt(int cfd, char pathname[]){
     int answer = 0;
-
     int filesize;
     CHECK_EQ_RETURN(readn(cfd, &filesize, sizeof(int)), -1, "readn wrt", -1);
 
@@ -506,7 +501,6 @@ int wrt(int cfd, char pathname[]){
         perror("malloc");
         return -1;
     }
-
     CHECK_EQ_RETURN(readn(cfd, filebuffer, filesize+1), -1, "readn wrt", -1);
     //printf("%s", filebuffer);
     File_t* tmp;
@@ -534,7 +528,7 @@ int wrt(int cfd, char pathname[]){
         answer = -1;
     }
     CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen wrt", -1);
-    return 0;
+    return answer;
 }
 
 int cls(int cfd, char pathname[]){
@@ -546,11 +540,9 @@ int cls(int cfd, char pathname[]){
     }else{
         if(findNode(&tmp->openby, cfd) == -1){
             fprintf(stderr, "the client %d doesnt't have the file open\n", cfd);
-            freeFile(tmp);
             answer = -1;
         }else{
             removeNodeByKey(&tmp->openby, cfd);
-            freeFile(tmp);
         }
     }
     CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen cls", -1);
@@ -575,15 +567,12 @@ int rd(int cfd, char pathname[]){
 int rm(int cfd, char pathname[]){
     int answer = 0;
     File_t* tmp;
-    FILE* f;
-    f = fopen("hashtable.txt", "w+");
-    icl_hash_dump(f, storage_server);
-    fclose(f);
+    
     if((tmp = icl_hash_find(storage_server, pathname)) == NULL){
         fprintf(stderr,"file not present\n");
         answer = -1;
     }else{
-        if(icl_hash_delete(storage_server, pathname, free, freeFile) == -1)
+        if(icl_hash_delete(storage_server, pathname, freeFile) == -1)
             printf("non riesco a rimuovere\n");
     }
     CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen rm", -1);

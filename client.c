@@ -90,6 +90,7 @@ int main(int argc, char* argv[]){
 
     int opt; 
     size_t size;
+    int answer;
     while((opt = getopt(argc, argv, ":hf:w:W:D:r:R:d:t:l:u:c:p")) != -1){ //opstring contine le opzioni che vogliamo gestire
         //se getop trova una delle opzioni ritrona un intero (relativo al carattere letto) quindi posso fare lo switch
         char dir_w[MAX_DIR_LEN];
@@ -101,16 +102,23 @@ int main(int argc, char* argv[]){
                 break;
             case 'w':
                 if(parse_w(optarg, dir_w, &numFileToSend) == -1){
-                    fprintf(stderr, "Impossible to parse -w correctly\n");
+                    if(print_flag)
+                        fprintf(stderr, "Impossible to parse -w correctly\n");
                     break;
                 }
-                if(arg_w(dir_w, &numFileToSend) == -1){
-                    fprintf(stderr, "Operation -w doesn't end correctly\n");
+                answer = arg_w(dir_w, &numFileToSend);
+                if(print_flag){
+                    if(answer == -1)
+                        fprintf(stderr, "Operation: -w, outcome: negative\n");
+                    else fprintf(stdout, "Operation: -w, outcome: postive, used directory: %s\n", dir_w);
                 }
                 break;
             case 'W':
-                if(arg_W(optarg) == -1){
-                    fprintf(stderr, "Operation -W doesn't end correctly\n");
+                answer = arg_W(optarg);
+                if(print_flag){
+                    if(answer == -1)
+                        fprintf(stderr, "Operation: -W, outcome: negative\n");
+                    else fprintf(stdout, "Operation: -W, outcome: positive, writen files: %s\n", optarg);
                 }
                 break; 
             case 'D':
@@ -250,6 +258,7 @@ int arg_w(char* dirname, long* fileToSend){
 }
 
 int arg_W(char* optarg){
+    printf("%s\n", optarg);
     char* tmpstr;
     char* token = strtok_r(optarg, ",", &tmpstr);
     char resolvedpath[PATH_MAX];
@@ -262,7 +271,6 @@ int arg_W(char* optarg){
         stat(resolvedpath, &info_file);
         if (S_ISREG(info_file.st_mode)) {
             CHECK_EQ_RETURN(openFile(resolvedpath, O_CREATE), -1, "openFile arg_W", -1);
-            printf("%s\n", resolvedpath);
             CHECK_EQ_RETURN(writeFile(resolvedpath, NULL), -1, "writeFile arg_W", -1);
             CHECK_EQ_RETURN(closeFile(resolvedpath), -1, "closeFile arg_W", -1);
         }

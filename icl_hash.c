@@ -220,7 +220,7 @@ icl_hash_update_insert(icl_hash_t *ht, void* key, void *data, void **olddata)
  *
  * @returns 0 on success, -1 on failure.
  */
-int icl_hash_delete(icl_hash_t *ht, void* key, void (*free_key)(void*), void (*free_data)(void*))
+int icl_hash_delete(icl_hash_t *ht, void* key, void (*free_data)(void*))
 {
     icl_entry_t *curr, *prev;
     unsigned int hash_val;
@@ -236,9 +236,8 @@ int icl_hash_delete(icl_hash_t *ht, void* key, void (*free_key)(void*), void (*f
             } else {
                 prev->next = curr->next;
             }
-            if (*free_key && curr->key) (*free_key)(curr->key);
             if (*free_data && curr->data) (*free_data)(curr->data);
-            ht->nentries++;
+            ht->nentries--;
             free(curr);
             return 0;
         }
