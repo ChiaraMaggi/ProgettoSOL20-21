@@ -89,7 +89,6 @@ int main(int argc, char* argv[]){
     }
 
     int opt; 
-    size_t size;
     int answer;
     while((opt = getopt(argc, argv, ":hf:w:W:D:r:R:d:t:l:u:c:p")) != -1){ //opstring contine le opzioni che vogliamo gestire
         //se getop trova una delle opzioni ritrona un intero (relativo al carattere letto) quindi posso fare lo switch
@@ -114,7 +113,7 @@ int main(int argc, char* argv[]){
                 }
                 break;
             case 'W':
-                answer = arg_W(optarg);
+                answer = arg_W(optarg);\
                 if(print_flag){
                     if(answer == -1)
                         fprintf(stderr, "Operation: -W, outcome: negative\n");
@@ -125,8 +124,12 @@ int main(int argc, char* argv[]){
                 fprintf(stderr, "Operation -D not supported\n");
                 break;
             case 'r':
-                if(arg_r(optarg, dir_r) == -1)
-                    fprintf(stderr, "Operation -r doesn't end correctly\n");
+                answer = arg_r(optarg, dir_r);
+                if(print_flag){
+                    if(answer == -1)
+                        fprintf(stderr, "Operation: -r outcome: negative\n");
+                    else fprintf(stdout, "Operation: -r, outcome: positive, readen files: %s\n", optarg);
+                }
                 break;
             case 'R':
                 break;
@@ -141,8 +144,12 @@ int main(int argc, char* argv[]){
                 fprintf(stderr, "Operation -u not supported\n");
                 break;
             case 'c':
-                if(arg_c(optarg) == -1)
-                    fprintf(stderr, "Operation -c doesn't end correctly\n");
+                answer = arg_c(optarg);
+                if(print_flag){
+                    if(answer == -1)
+                        fprintf(stderr, "Operation: -c, outcome: negative\n");
+                    else fprintf(stdout, "Operation: -c, outcome: positive, removed files: %s\n", optarg);
+                }
                 break;
             case 'p':
                 break;
@@ -213,38 +220,26 @@ int arg_w(char* dirname, long* fileToSend){
     int r;
     CHECK_EQ_EXIT((r = stat(dirname, &statbuf)), -1, "stat arg_w");
     if(!S_ISDIR(statbuf.st_mode)){
-        printf("%s is not a directory\n", dirname);
-        exit(EXIT_FAILURE);
+        if(print_flag) printf("%s is not a directory\n", dirname);
+        return -1;
     }
 
     DIR* dir;
-    CHECK_EQ_RETURN((dir = opendir(dirname)), NULL, "opendir", -1);
     struct dirent* file;
+    CHECK_EQ_RETURN((dir = opendir(dirname)), NULL, "opendir arg_w", -1);
 
     while(*fileToSend != 0 && (errno = 0, file = readdir(dir)) != NULL){
-        struct stat statebuf;
-        char filename[MAX_LEN]; 
-        int len1 = strlen(dirname);
-        int len2 = strlen(file->d_name);
-        if ((len1+len2+2)>MAX_LEN) {
-            fprintf(stderr, "ERRORE: MAXFILENAME too small\n");
-            exit(EXIT_FAILURE);
-        }	    
-        strncpy(filename,dirname, MAX_LEN-1);
-        strncat(filename,"/", MAX_LEN-1);
-        strncat(filename,file->d_name, MAX_LEN-1);
+        char path[PATH_MAX];
+		snprintf(path, sizeof(path), "%s/%s", dirname, file->d_name);
 
-        CHECK_EQ_RETURN(stat(filename, &statebuf), -1, "stat", -1);
-       
-        if(S_ISDIR(statebuf.st_mode)){
-            if(!isdot(filename)){
-                int ret = arg_w(filename, fileToSend);
-                if(ret == -1) return -1;
-            }
+        struct stat info;
+        CHECK_EQ_RETURN(stat(path, &info), -1, "stat arg_w", -1);
+        if(S_ISDIR(info.st_mode)){
+            if (strcmp(file->d_name,".")==0 || strcmp(file->d_name,"..")==0) continue;
+			arg_w(path, fileToSend);
         }else{
-            char resolvedpath[PATH_MAX];
-            char* res;
-            CHECK_EQ_RETURN((res = realpath(filename, resolvedpath)), NULL, "realpath", -1);
+            char* resolvedpath;
+            CHECK_EQ_RETURN((resolvedpath = realpath(path, resolvedpath)), NULL, "realpath arg_w", -1);
             CHECK_EQ_RETURN(openFile(resolvedpath, O_CREATE), -1, "openFile arg_w", -1);
             CHECK_EQ_RETURN(writeFile(resolvedpath, NULL), -1, "writeFile arg_w", -1);
             CHECK_EQ_RETURN(closeFile(resolvedpath), -1, "closeFile arg_w", -1);
@@ -258,7 +253,6 @@ int arg_w(char* dirname, long* fileToSend){
 }
 
 int arg_W(char* optarg){
-    printf("%s\n", optarg);
     char* tmpstr;
     char* token = strtok_r(optarg, ",", &tmpstr);
     char resolvedpath[PATH_MAX];
@@ -334,7 +328,6 @@ int arg_c(char* optarg){
         char* file = token;
         char* res;
         CHECK_EQ_RETURN((res = realpath(file, resolvedpath)), NULL, "realpath arg_c", -1);
-        printf("%s\n", resolvedpath);
         CHECK_EQ_RETURN(removeFile(resolvedpath), -1, "removeFile arg_c", -1);
         token = strtok_r(NULL, ",", &tmpstr);
     }

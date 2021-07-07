@@ -46,6 +46,8 @@ icl_hash_destroy(icl_hash_t *, void (*)(void*), void (*)(void*)),
 
 int icl_hash_delete( icl_hash_t *ht, void* key, void (*free_data)(void*) );
 
+int icl_hash_print(icl_hash_t* ht);
+
 /* simple hash function */
 unsigned int
 hash_pjw(void* key);

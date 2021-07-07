@@ -310,4 +310,22 @@ icl_hash_dump(FILE* stream, icl_hash_t* ht)
     return 0;
 }
 
+int
+icl_hash_print(icl_hash_t* ht)
+{
+    icl_entry_t *bucket, *curr;
+    int i;
 
+    if(!ht) return -1;
+
+    for(i=0; i<ht->nbuckets; i++) {
+        bucket = ht->buckets[i];
+        for(curr=bucket; curr!=NULL; ) {
+            if(curr->key)
+                fprintf(stdout, "icl_hash_dump: %s: %p\n", (char *)curr->key, curr->data);
+            curr=curr->next;
+        }
+    }
+
+    return 0;
+}

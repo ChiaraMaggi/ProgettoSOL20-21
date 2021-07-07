@@ -46,7 +46,7 @@ typedef struct File{
     int fdcreator;
     int operationdonebycreator;
     QueueNode_t* openby;
-    void* contenuto;
+    void* contents;
     int size;
 }File_t;
 
@@ -214,7 +214,6 @@ int main(int argc, char* argv[]){
                 }else if(i == pipefd[0]){ //è una scrittura sulla pipe
                     int fdfrompipe;
                     int len;
-                    int flag;
                     if((len = readn(pipefd[0], &fdfrompipe, sizeof(int))) != -1){
                         //CHECK_EQ_EXIT(read(pipefd[0], &flag, sizeof(flag)), -1, "read pipe");
                         /*if(flag == -1){
@@ -266,14 +265,14 @@ File_t* createFile(int fd){
     file->fdcreator = fd;
     file->operationdonebycreator++;
     insertNode(&file->openby, fd);
-    file->contenuto = NULL;
+    file->contents = NULL;
     file->size = 0;
     return file;
 }
 
 void freeFile(void* file){
     File_t* data = file;
-    free(data->contenuto);
+    free(data->contents);
     QueueNode_t* curr = data->openby;
     QueueNode_t* prec;
     while(curr != NULL){
@@ -415,7 +414,7 @@ void* workerFunction(void* args){
         if(readn(cfd, &request, sizeof(request_t)) == -1){
             request.req = -1;
         }
-        printf("REQUEST: %d eseguita da worker %lu\n", request.req, pthread_self());
+        printf("REQUEST %d: ", request.req);
         switch (request.req){
             case OPEN:
                 printf("APERTURA FILE\n");
@@ -456,17 +455,18 @@ void* workerFunction(void* args){
         if(request.req != CLOSECONN){
             writen(pipefd[1], &cfd, sizeof(int));
         }
+        icl_hash_print(storage_server);
+        printf("\n");
     }
     return 0;
 }
 
 int opn(type_t req, int cfd, char pathname[]){
-    printf("%s\n", pathname);
     int answer = 0;
     File_t* tmp;
     if(req == OPENC){
         if((tmp = icl_hash_find(storage_server, pathname)) != NULL){
-            fprintf(stderr,"impossible to satisfy the request, file still in the storage\n");
+            fprintf(stderr,"file still in the storage\n");
             answer = -1;
         }else{
             if(serverstate->num_file < informations->max_file){
@@ -480,7 +480,7 @@ int opn(type_t req, int cfd, char pathname[]){
     }
     if(req == OPEN){
         if((tmp = icl_hash_find(storage_server, pathname)) == NULL){
-            fprintf(stderr, "impossible to satisfy the request, file not present in the storage\n");
+            fprintf(stderr, "file not present in the storage\n");
             answer = -1;
         }
         else{
@@ -509,8 +509,8 @@ int wrt(int cfd, char pathname[]){
         if(tmp->fdcreator == cfd && tmp->operationdonebycreator == 1 && flag == 0){ //controllo che sia il creatore e abbia fatto come ultima operazione openFile con O_CREATE
             if(serverstate->free_space >= filesize){
                 tmp->size = filesize;
-                tmp->contenuto = malloc(filesize*sizeof(char));
-                strcpy(tmp->contenuto, filebuffer);
+                tmp->contents = malloc(filesize*sizeof(char));
+                strcpy(tmp->contents, filebuffer);
                 tmp->operationdonebycreator++;
 
                 serverstate->free_space = serverstate->free_space - filesize;
@@ -560,7 +560,7 @@ int rd(int cfd, char pathname[]){
         else answer = -1;
     }else answer = -1;
     CHECK_EQ_RETURN(writen(cfd, &size, sizeof(int)), -1, "writen rd", -1);
-    CHECK_EQ_RETURN(writen(cfd, tmp->contenuto, tmp->size), -1, "writen rd", -1);
+    CHECK_EQ_RETURN(writen(cfd, tmp->contents, tmp->size), -1, "writen rd", -1);
     return answer;
 }
 
@@ -572,8 +572,14 @@ int rm(int cfd, char pathname[]){
         fprintf(stderr,"file not present\n");
         answer = -1;
     }else{
-        if(icl_hash_delete(storage_server, pathname, freeFile) == -1)
+        int filesize = tmp->size;
+        if(icl_hash_delete(storage_server, pathname, freeFile) == -1){
             printf("non riesco a rimuovere\n");
+            answer = -1;
+        }
+        serverstate->num_file--;
+        serverstate->used_space = serverstate->used_space - filesize;
+        serverstate->free_space = serverstate->free_space + filesize;
     }
     CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen rm", -1);
     return answer;
