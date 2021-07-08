@@ -76,10 +76,10 @@ int closeConnection(const char* sockname){
         request_t request;
         request.req = CLOSECONN;
         strcpy(request.pathname, sockname);
-        CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(request_t))), -1, "writen closeConnection", -1);
+        CHECK_EQ_EXIT((writen(fd_socket, &request, sizeof(request_t))), -1, "writen closeConnection");
     
         int answer = -1;
-    	CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn closeConnection", -1);
+    	CHECK_EQ_EXIT((readn(fd_socket, &answer, sizeof(int))), -1, "readn closeConnection");
         if(answer == -1){
             errno = ECANCELED;
             return -1;
@@ -124,10 +124,13 @@ int openFile(const char* pathname, int flags){
     int answer = -1;  //risposta server
     CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn openFile", -1);
 
-	if(answer == -1){
-		errno = ECANCELED;
+	if(answer == -3){
+		errno = EEXIST;
 		return -1;
-	}
+	}else if(answer == -1){
+        errno = ENOENT;
+        return -1;
+    }
     return 0;
 }
 
@@ -148,16 +151,23 @@ int readFile(const char* pathname, void** buf, size_t* size){
     request_t request;
     request.req = READ;
     strcpy(request.pathname, pathname);
-    CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(request_t))), -1, "writen readFile", -1);
+    CHECK_EQ_EXIT((writen(fd_socket, &request, sizeof(request_t))), -1, "writen readFile");
+
     int answer = -1;
-    CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn readFile", -1);
+    CHECK_EQ_EXIT((readn(fd_socket, &answer, sizeof(int))), -1, "readn readFile");
     if(answer == -1){
-        errno = ECANCELED;
+        errno = ENOENT;
         return -1;
+    }else if(answer == -2){
+        errno = EPERM;
+        return -1;
+    }else{
+        int bufsize;
+        CHECK_EQ_EXIT((readn(fd_socket, &bufsize, sizeof(int))), -1, "readn readFile");
+        *buf = malloc(bufsize*sizeof(char));
+        CHECK_EQ_EXIT((readn(fd_socket, *buf, sizeof(buf))), -1, "readn readFile");
+        *size = bufsize;
     }
-    *buf = malloc(answer*sizeof(char));
-    CHECK_EQ_RETURN((readn(fd_socket, *buf, sizeof(buf))), -1, "readn readFile", -1);
-    *size = answer;
     return 0;
 }
 
@@ -199,7 +209,7 @@ int writeFile(const char* pathname, const char* dirname){
     request_t request;
     request.req = WRITE;
     strcpy(request.pathname, pathname);
-    CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(request_t))), -1, "writen writeFile", -1);
+    CHECK_EQ_EXIT((writen(fd_socket, &request, sizeof(request_t))), -1, "writen writeFile");
 
     int answer = -1;
 
@@ -221,12 +231,18 @@ int writeFile(const char* pathname, const char* dirname){
         file_buffer[newlen++] = '\0';
         fclose(fd_file);
 
-        CHECK_EQ_RETURN((writen(fd_socket, &file_size, sizeof(int))), -1, "writen writefile", -1);
-        CHECK_EQ_RETURN((writen(fd_socket, file_buffer, file_size+1)), -1, "writen writeFile", -1);
-        CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn writeFile", -1);
-        return answer;
+        CHECK_EQ_EXIT((writen(fd_socket, &file_size, sizeof(int))), -1, "writen writefile");
+        CHECK_EQ_EXIT((writen(fd_socket, file_buffer, file_size+1)), -1, "writen writeFile");
+        CHECK_EQ_EXIT((readn(fd_socket, &answer, sizeof(int))), -1, "readn writeFile");
+        if(answer == -1){
+            errno = ENOENT;
+            return -1;
+        }else if(answer == -2){
+            errno = EPERM;
+            return -1;
+        } else return 0;
     }else{
-        return 0;
+        return -1;
     }
 
 }
@@ -291,12 +307,16 @@ int closeFile(const char* pathname){
     request_t request;
     request.req = CLOSE;
     strcpy(request.pathname, pathname);
-    CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(request_t))), -1, "writen closeFiles", -1);
+    CHECK_EQ_EXIT((writen(fd_socket, &request, sizeof(request_t))), -1, "writen closeFiles");
 
     int answer = -1;
-    CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn closeFile", -1);
+    CHECK_EQ_EXIT((readn(fd_socket, &answer, sizeof(int))), -1, "readn closeFile");
     if(answer == -1){
-        errno = ECANCELED;
+        errno = ENOENT;
+        return -1;
+    }
+    else if(answer == -2){
+        errno = EPERM;
         return -1;
     }
     return 0;
@@ -322,10 +342,8 @@ int removeFile(const char* pathname){
     int answer = -1;
     CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn closeFile", -1);
     if(answer == -1){
-        errno = ECANCELED;
+        errno = ENOENT;
         return -1;
     }
     return 0;
-
-    return -1;
 }

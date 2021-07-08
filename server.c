@@ -46,7 +46,7 @@ typedef struct File{
     int fdcreator;
     int operationdonebycreator;
     QueueNode_t* openby;
-    void* contents;
+    char* contents;
     int size;
 }File_t;
 
@@ -451,7 +451,7 @@ void* workerFunction(void* args){
                 fprintf(stderr, "invalid request\n");
                 break;
         }
-        if(answer == -1) fprintf(stderr, "impossible to satisfy the request %d\n", request.req);
+        if(answer != 0) fprintf(stderr, "impossible to satisfy the request %d\n", request.req);
         if(request.req != CLOSECONN){
             writen(pipefd[1], &cfd, sizeof(int));
         }
@@ -467,7 +467,7 @@ int opn(type_t req, int cfd, char pathname[]){
     if(req == OPENC){
         if((tmp = icl_hash_find(storage_server, pathname)) != NULL){
             fprintf(stderr,"file still in the storage\n");
-            answer = -1;
+            answer = -3; //EEXIST
         }else{
             if(serverstate->num_file < informations->max_file){
                 File_t* file = createFile(cfd);
@@ -481,12 +481,12 @@ int opn(type_t req, int cfd, char pathname[]){
     if(req == OPEN){
         if((tmp = icl_hash_find(storage_server, pathname)) == NULL){
             fprintf(stderr, "file not present in the storage\n");
-            answer = -1;
+            answer = -1; //ENOENT
         }
         else{
             insertNode(&tmp->openby, cfd);
         }
-    }
+    }   
     CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen opn", -1);
     return answer;
 }
@@ -494,7 +494,7 @@ int opn(type_t req, int cfd, char pathname[]){
 int wrt(int cfd, char pathname[]){
     int answer = 0;
     int filesize;
-    CHECK_EQ_RETURN(readn(cfd, &filesize, sizeof(int)), -1, "readn wrt", -1);
+    CHECK_EQ_EXIT(readn(cfd, &filesize, sizeof(int)), -1, "readn wrt");
 
     char* filebuffer = malloc((filesize+1)*sizeof(char));
     if(!filebuffer){
@@ -509,7 +509,7 @@ int wrt(int cfd, char pathname[]){
         if(tmp->fdcreator == cfd && tmp->operationdonebycreator == 1 && flag == 0){ //controllo che sia il creatore e abbia fatto come ultima operazione openFile con O_CREATE
             if(serverstate->free_space >= filesize){
                 tmp->size = filesize;
-                tmp->contents = malloc(filesize*sizeof(char));
+                tmp->contents = malloc((filesize+1)*sizeof(char));
                 strcpy(tmp->contents, filebuffer);
                 tmp->operationdonebycreator++;
 
@@ -521,11 +521,11 @@ int wrt(int cfd, char pathname[]){
             }
         }else{
             fprintf(stderr, "operation not authorized for client %d\n", cfd);
-            answer = -1;
+            answer = -2; //EPERM
         }
     }else{
         fprintf(stderr, "file not found in the storage\n");
-        answer = -1;
+        answer = -1; //ENOENT
     }
     CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen wrt", -1);
     return answer;
@@ -536,11 +536,11 @@ int cls(int cfd, char pathname[]){
     File_t* tmp;
     if((tmp = icl_hash_find(storage_server, pathname))== NULL){
         fprintf(stderr,"file not present\n");
-        answer = -1;
+        answer = -1; //ENOENT
     }else{
         if(findNode(&tmp->openby, cfd) == -1){
             fprintf(stderr, "the client %d doesnt't have the file open\n", cfd);
-            answer = -1;
+            answer = -2; //EPERM
         }else{
             removeNodeByKey(&tmp->openby, cfd);
         }
@@ -550,18 +550,22 @@ int cls(int cfd, char pathname[]){
 }
 
 int rd(int cfd, char pathname[]){
-    int answer = 0;
     File_t* tmp;
+    int answer = 0;
     int size = -1;
     if((tmp = icl_hash_find(storage_server, pathname) )!= NULL){
         if(findNode(&tmp->openby, cfd) == 0){
             size = tmp->size;
         }
-        else answer = -1;
-    }else answer = -1;
-    CHECK_EQ_RETURN(writen(cfd, &size, sizeof(int)), -1, "writen rd", -1);
-    CHECK_EQ_RETURN(writen(cfd, tmp->contents, tmp->size), -1, "writen rd", -1);
-    return answer;
+        else answer = -2; //EPERM
+    }else answer = -1; //ENOENT
+   
+    CHECK_EQ_EXIT(writen(cfd, &answer, sizeof(int)), -1, "writen rd");
+    if(answer != 0) return answer;
+
+    CHECK_EQ_EXIT(writen(cfd, &size, sizeof(int)), -1, "writen rd");
+    CHECK_EQ_EXIT(writen(cfd, tmp->contents, tmp->size), -1, "writen rd");
+    return 0;
 }
 
 int rm(int cfd, char pathname[]){
@@ -570,13 +574,11 @@ int rm(int cfd, char pathname[]){
     
     if((tmp = icl_hash_find(storage_server, pathname)) == NULL){
         fprintf(stderr,"file not present\n");
-        answer = -1;
+        answer = -1; //ENOENT
     }else{
         int filesize = tmp->size;
-        if(icl_hash_delete(storage_server, pathname, freeFile) == -1){
-            printf("non riesco a rimuovere\n");
-            answer = -1;
-        }
+        icl_hash_delete(storage_server, pathname, freeFile);
+        
         serverstate->num_file--;
         serverstate->used_space = serverstate->used_space - filesize;
         serverstate->free_space = serverstate->free_space + filesize;

@@ -106,30 +106,30 @@ int main(int argc, char* argv[]){
                     break;
                 }
                 answer = arg_w(dir_w, &numFileToSend);
-                if(print_flag){
+               /* if(print_flag){
                     if(answer == -1)
                         fprintf(stderr, "Operation: -w, outcome: negative\n");
                     else fprintf(stdout, "Operation: -w, outcome: postive, used directory: %s\n", dir_w);
-                }
+                }*/
                 break;
             case 'W':
-                answer = arg_W(optarg);\
-                if(print_flag){
+                answer = arg_W(optarg);
+                /*if(print_flag){
                     if(answer == -1)
                         fprintf(stderr, "Operation: -W, outcome: negative\n");
                     else fprintf(stdout, "Operation: -W, outcome: positive, writen files: %s\n", optarg);
-                }
+                }*/
                 break; 
             case 'D':
                 fprintf(stderr, "Operation -D not supported\n");
                 break;
             case 'r':
                 answer = arg_r(optarg, dir_r);
-                if(print_flag){
+                /*if(print_flag){
                     if(answer == -1)
                         fprintf(stderr, "Operation: -r outcome: negative\n");
                     else fprintf(stdout, "Operation: -r, outcome: positive, readen files: %s\n", optarg);
-                }
+                }*/
                 break;
             case 'R':
                 break;
@@ -218,6 +218,7 @@ int arg_w(char* dirname, long* fileToSend){
     //controllo se dirname è effettivamente una directory
     struct stat statbuf;
     int r;
+    char resolvedpath[PATH_MAX];
     CHECK_EQ_EXIT((r = stat(dirname, &statbuf)), -1, "stat arg_w");
     if(!S_ISDIR(statbuf.st_mode)){
         if(print_flag) printf("%s is not a directory\n", dirname);
@@ -238,12 +239,24 @@ int arg_w(char* dirname, long* fileToSend){
             if (strcmp(file->d_name,".")==0 || strcmp(file->d_name,"..")==0) continue;
 			arg_w(path, fileToSend);
         }else{
-            char* resolvedpath;
-            CHECK_EQ_RETURN((resolvedpath = realpath(path, resolvedpath)), NULL, "realpath arg_w", -1);
-            CHECK_EQ_RETURN(openFile(resolvedpath, O_CREATE), -1, "openFile arg_w", -1);
-            CHECK_EQ_RETURN(writeFile(resolvedpath, NULL), -1, "writeFile arg_w", -1);
-            CHECK_EQ_RETURN(closeFile(resolvedpath), -1, "closeFile arg_w", -1);
+            char* res;
+            CHECK_EQ_RETURN((res = realpath(path, resolvedpath)), NULL, "realpath arg_w", -1);
+            if(openFile(resolvedpath, O_CREATE) != 0){
+                perror("ERROR creating file");
+                if(print_flag) fprintf(stderr, "Operation: -w, outcome: negative\n");
+                continue;
+            }
+            if(writeFile(resolvedpath, NULL) != 0){
+                perror("ERROR writing file");
+                if(print_flag) fprintf(stderr, "Operation: -w, outcome: negative\n");
+                continue;
+            }
+            if(closeFile(resolvedpath) != 0) perror("ERROR closing file");
+        
             *fileToSend = *fileToSend - 1;
+            if(print_flag){
+                fprintf(stdout, "Operation: -w, outcome: positive, writen file: %s\n", path);
+            }
         }
     }
     
@@ -259,16 +272,31 @@ int arg_W(char* optarg){
     while(token){
         char* file = token;
         char* res;
-        CHECK_EQ_RETURN((res = realpath(file, resolvedpath)), NULL, "realpath arg_W", -1);
-        //printf("%s\n",resolvedpath);
+        if((res = realpath(file, resolvedpath)) ==  NULL){
+            perror("ERROR realpath");
+            if(print_flag) fprintf(stderr, "Operation: -W, file: %s, outcome: negative\n", file);
+            token = strtok_r(NULL, ",", &tmpstr);
+            continue;
+        }
         struct stat info_file;
         stat(resolvedpath, &info_file);
         if (S_ISREG(info_file.st_mode)) {
-            CHECK_EQ_RETURN(openFile(resolvedpath, O_CREATE), -1, "openFile arg_W", -1);
-            CHECK_EQ_RETURN(writeFile(resolvedpath, NULL), -1, "writeFile arg_W", -1);
-            CHECK_EQ_RETURN(closeFile(resolvedpath), -1, "closeFile arg_W", -1);
+            if(openFile(resolvedpath, O_CREATE) != 0){
+                perror("ERROR creating file");
+                if(print_flag) fprintf(stderr, "Operation: -W, file: %s, outcome: negative\n", file);
+                token = strtok_r(NULL, ",", &tmpstr);
+                continue;
+            }
+            if(writeFile(resolvedpath, NULL) != 0){
+                perror("ERROR writing file");              
+                if(print_flag) fprintf(stderr, "Operation: -W, file: %s, outcome: negative\n", file);
+                token = strtok_r(NULL, ",", &tmpstr);
+                continue;
+            }
+            if(closeFile(resolvedpath) != 0) perror("ERROR closing file");
         }
         token = strtok_r(NULL, ",", &tmpstr);
+        if(print_flag) fprintf(stdout, "Operation: -W, outcome: positive, writen file: %s\n", file);
     }
     return 0;
 }
@@ -278,15 +306,29 @@ int arg_r(char* optarg, char* dir){
     char* token = strtok_r(optarg, ",", &tmpstr);
     char resolvedpath[PATH_MAX];
     while(token){
-        char* file = token;
         char* res;
-        CHECK_EQ_RETURN((res = realpath(file, resolvedpath)), NULL, "realpath arg_r", -1);
-        CHECK_EQ_RETURN(openFile(resolvedpath, 00), -1, "openFile arg_r", -1);
+        if((res = realpath(token, resolvedpath)) ==  NULL){
+            perror("ERROR realpath");
+            if(print_flag) fprintf(stderr, "Operation: -r, file: %s, outcome: negative\n", token);
+            token = strtok_r(NULL, ",", &tmpstr);
+            continue;
+        }
+        if(openFile(resolvedpath, 0) != 0){
+            perror("ERROR opening file");
+            if(print_flag) fprintf(stderr, "Operation: -r, file: %s, outcome: negative\n", token);
+            token = strtok_r(NULL, ",", &tmpstr);
+            continue;
+        }
 
         //READ FILE
         char* buf;
         size_t size;
-        CHECK_EQ_RETURN(readFile(resolvedpath,(void**)&buf,&size), -1, "readFile arg_r", -1);
+        if(readFile(resolvedpath,(void**)&buf,&size) != 0){
+            perror("ERROR reading file");
+            if(print_flag) fprintf(stderr, "Operation: -r, file: %s, outcome: negative\n", token);
+            token = strtok_r(NULL, ",", &tmpstr);
+            continue;
+        }
         if(dir != NULL){
             char* filename = basename(resolvedpath);
             char path[PATH_MAX];
@@ -296,17 +338,16 @@ int arg_r(char* optarg, char* dir){
             //CREA FILE SE NON ESISTE
             if((fd_file = open(path, O_CREAT|O_WRONLY, 0666)) == -1){
                 perror("open");
-                if(print_flag)
-                    printf("richiesta di scrittura del file <%s> su disco è fallita\n",token);
+                if(print_flag) printf("Request to write the file %s on disk failed\n", token);
                 token = strtok_r(NULL, ",", &tmpstr);
+                close(fd_file);
                 //free(buf);
                 continue;
             }
 
             if(writen(fd_file, buf, size) == -1){
                 perror("writen");
-                if(print_flag)
-                    printf("richiesta di scrittura del file <%s> su disco è fallita\n",token);
+                if(print_flag) printf("Request to write the file %s on disk failed\n", token);
                 token = strtok_r(NULL, ",", &tmpstr);
                 close(fd_file);
                 //free(buf);
@@ -314,7 +355,7 @@ int arg_r(char* optarg, char* dir){
             }
 			close(fd_file);
     	}
-        CHECK_EQ_RETURN(closeFile(resolvedpath), -1, "closeFile arg_r", -1);
+        if(closeFile(resolvedpath) != 0) perror("ERROR closing file");
         token = strtok_r(NULL,",",&tmpstr);
     }
     return 0;
@@ -327,8 +368,18 @@ int arg_c(char* optarg){
     while(token){
         char* file = token;
         char* res;
-        CHECK_EQ_RETURN((res = realpath(file, resolvedpath)), NULL, "realpath arg_c", -1);
-        CHECK_EQ_RETURN(removeFile(resolvedpath), -1, "removeFile arg_c", -1);
+        if((res = realpath(file, resolvedpath)) ==  NULL){
+            perror("ERROR realpath");
+            if(print_flag) fprintf(stderr, "Operation: -c, file: %s, outcome: negative\n", file);
+            token = strtok_r(NULL, ",", &tmpstr);
+            continue;
+        }
+        if(removeFile(resolvedpath) != 0){
+            perror("ERROR removing file");
+            if(print_flag) fprintf(stderr, "Operation: -c, file: %s, outcome: negative\n", file);
+            token = strtok_r(NULL, ",", &tmpstr);
+            continue; 
+        }
         token = strtok_r(NULL, ",", &tmpstr);
     }
     return 0;

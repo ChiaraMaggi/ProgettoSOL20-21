@@ -238,6 +238,7 @@ int icl_hash_delete(icl_hash_t *ht, void* key, void (*free_data)(void*))
             }
             if (*free_data && curr->data) (*free_data)(curr->data);
             ht->nentries--;
+            strcpy(key, "\0");
             free(curr);
             return 0;
         }
