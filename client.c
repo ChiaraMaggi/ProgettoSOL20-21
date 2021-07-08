@@ -145,11 +145,11 @@ int main(int argc, char* argv[]){
                 break;
             case 'c':
                 answer = arg_c(optarg);
-                if(print_flag){
+                /*if(print_flag){
                     if(answer == -1)
                         fprintf(stderr, "Operation: -c, outcome: negative\n");
                     else fprintf(stdout, "Operation: -c, outcome: positive, removed files: %s\n", optarg);
-                }
+                }*/
                 break;
             case 'p':
                 break;
@@ -322,7 +322,7 @@ int arg_r(char* optarg, char* dir){
 
         //READ FILE
         char* buf;
-        size_t size;
+        size_t size = 0;
         if(readFile(resolvedpath,(void**)&buf,&size) != 0){
             perror("ERROR reading file");
             if(print_flag) fprintf(stderr, "Operation: -r, file: %s, outcome: negative\n", token);
@@ -356,6 +356,7 @@ int arg_r(char* optarg, char* dir){
 			close(fd_file);
     	}
         if(closeFile(resolvedpath) != 0) perror("ERROR closing file");
+        if(print_flag) fprintf(stdout, "Operation: -r, outcome: positive, readen files: %s, size readen: %ld\n", token, size);
         token = strtok_r(NULL,",",&tmpstr);
     }
     return 0;
@@ -380,6 +381,7 @@ int arg_c(char* optarg){
             token = strtok_r(NULL, ",", &tmpstr);
             continue; 
         }
+        if(print_flag) fprintf(stdout, "Operation: -c, outcome: positive, removed files: %s\n", file);
         token = strtok_r(NULL, ",", &tmpstr);
     }
     return 0;

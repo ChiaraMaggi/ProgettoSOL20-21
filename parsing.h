@@ -20,8 +20,9 @@ typedef struct Info
 {
     int workers_thread; /*Numero di thread workers*/
     int max_file; /*Numero massimo di file contenibili nello storage*/
-    int storage_size;  /*Spazio di arrchiviazione*/
+    int storage_size;  /*Spazio di archiviazione*/
     char* socket_name; /*Nome del Socket*/
+    int num_buckets; /*numero buckets hashtable*/
 }Info_t;
 
 /*

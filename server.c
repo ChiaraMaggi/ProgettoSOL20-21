@@ -33,7 +33,7 @@
 #define DEFAULT_MAX_FILE 100
 #define DEFAULT_STORAGE_SIZE 512
 #define DEFAULT_SOCKET_NAME "./SOLsocket.sk"
-#define NUMBUCKETS 100
+#define DEFAULT_NUM_BUCKETS 100
 
 /*================================== STRUTTURE UTILI ====================================================*/
 typedef struct QueueNode{
@@ -63,9 +63,9 @@ typedef struct Statistics{
 }Statistics_t;
 
 /*================================== VARIABILI GLOBALI ==================================================*/
-icl_hash_t* storage_server;
-Info_t* informations;
-Serverstate_t* serverstate;
+Hashtable_t* storage_server;
+Info_t* info;
+Serverstate_t* storage_state;
 int listenfd;
 QueueNode_t* clientQueue;
 pthread_t* workers;
@@ -119,8 +119,7 @@ int main(int argc, char* argv[]){
     SYSCALL_PTHREAD(pthread_sigmask(SIG_SETMASK,&sigset,NULL),"pthread_sigmask");
 
     /*-----------CONFIGUARZIONE SERVER-----------------*/
-    storage_server = icl_hash_create(NUMBUCKETS, hash_pjw, string_compare);
-    informations = initInfo();
+    info = initInfo();
 
     /*caso in cui il valori passati non sono corretti o incompleti*/
     if((argc == 3 && strcmp(argv[1], "-f")) || argc == 2){
@@ -131,25 +130,26 @@ int main(int argc, char* argv[]){
     /*caso in cui il file di congifigurazione non è passato*/
     if(argc == 1){
         printf("server default configuration (configuration file is not passed)\n");
-        setDefault(informations);
+        setDefault(info);
     }
     else{ /*caso corretto*/
-        if(parsConfiguration(argv[2], informations) == -1){
+        if(parsConfiguration(argv[2], info) == -1){
             /*se qualcosa va storto nel parsing setto valori di default*/
             fprintf(stderr, "ERROR: configuration file is not parsed correctly, server will be setted with default values\n");
-            setDefault(informations);
+            setDefault(info);
         }    
     }
     
-    serverstate = initServerstate(informations->storage_size);
+    storage_server = hashtableInit(info->num_buckets, hashFunction, hashCompare);
+    storage_state = initServerstate(info->storage_size);
 
     //THREAD POOL
-    CHECK_EQ_EXIT((workers = (pthread_t*)malloc(sizeof(pthread_t) * informations->workers_thread)), NULL, "Creazione Thread Pool\n");
+    CHECK_EQ_EXIT((workers = (pthread_t*)malloc(sizeof(pthread_t) * info->workers_thread)), NULL, "Creazione Thread Pool\n");
    
-    for (int i=0; i<informations->workers_thread; i++)
+    for (int i=0; i<info->workers_thread; i++)
         SYSCALL_PTHREAD(pthread_create(&workers[i],NULL,workerFunction,(void*)(&pipefd[1])),"Errore creazione thread pool");
 
-    unlink(informations->socket_name);
+    unlink(info->socket_name);
 
     /*---------------------------------CREAZIONE SOCKET-----------------------------------*/
     int max_fd = 0;
@@ -159,11 +159,11 @@ int main(int argc, char* argv[]){
     struct sockaddr_un sa;
     memset(&sa, '0', sizeof(sa));
 	sa.sun_family = AF_UNIX;
-	strncpy(sa.sun_path, informations->socket_name, UNIX_PATH_MAX);
+	strncpy(sa.sun_path, info->socket_name, UNIX_PATH_MAX);
 
     int listenfd;
 	CHECK_EQ_EXIT((listenfd = socket(AF_UNIX, SOCK_STREAM, 0)), -1, "socket");
-    unlink(informations->socket_name);
+    unlink(info->socket_name);
 
 	CHECK_EQ_EXIT(bind(listenfd, (struct sockaddr*)&sa, sizeof(sa)), -1, "bind");
 	CHECK_EQ_EXIT(listen(listenfd, SOMAXCON), -1, "listen");
@@ -238,7 +238,7 @@ int main(int argc, char* argv[]){
             }
         }
     }
-    for (int i=0;i<informations->workers_thread;i++) {
+    for (int i=0;i<info->workers_thread;i++) {
         SYSCALL_PTHREAD(pthread_join(workers[i],NULL),"Errore join thread");
     }
 
@@ -250,6 +250,7 @@ void setDefault(Info_t* info){
     info->max_file = DEFAULT_MAX_FILE;
     info->storage_size = DEFAULT_STORAGE_SIZE;
     strcpy(info->socket_name, DEFAULT_SOCKET_NAME);
+    info->num_buckets = DEFAULT_NUM_BUCKETS;
 }
 
 Serverstate_t* initServerstate(long size){
@@ -455,7 +456,7 @@ void* workerFunction(void* args){
         if(request.req != CLOSECONN){
             writen(pipefd[1], &cfd, sizeof(int));
         }
-        icl_hash_print(storage_server);
+        hashtablePrint(storage_server);
         printf("\n");
     }
     return 0;
@@ -465,21 +466,21 @@ int opn(type_t req, int cfd, char pathname[]){
     int answer = 0;
     File_t* tmp;
     if(req == OPENC){
-        if((tmp = icl_hash_find(storage_server, pathname)) != NULL){
+        if((tmp = hashtableFind(storage_server, pathname)) != NULL){
             fprintf(stderr,"file still in the storage\n");
             answer = -3; //EEXIST
         }else{
-            if(serverstate->num_file < informations->max_file){
+            if(storage_state->num_file < info->max_file){
                 File_t* file = createFile(cfd);
-                icl_hash_insert(storage_server, pathname, file);
-                serverstate->num_file++;
+                hashtableInsert(storage_server, pathname, strlen(pathname)*sizeof(char), file, sizeof(File_t));
+                storage_state->num_file++;
             }else{
                 //politica di rimpiazzo
             }
         }
     }
     if(req == OPEN){
-        if((tmp = icl_hash_find(storage_server, pathname)) == NULL){
+        if((tmp = hashtableFind(storage_server, pathname)) == NULL){
             fprintf(stderr, "file not present in the storage\n");
             answer = -1; //ENOENT
         }
@@ -504,17 +505,17 @@ int wrt(int cfd, char pathname[]){
     CHECK_EQ_RETURN(readn(cfd, filebuffer, filesize+1), -1, "readn wrt", -1);
     //printf("%s", filebuffer);
     File_t* tmp;
-    if((tmp = icl_hash_find(storage_server, pathname)) != NULL){
+    if((tmp = hashtableFind(storage_server, pathname)) != NULL){
         int flag = findNode(&tmp->openby, cfd);
         if(tmp->fdcreator == cfd && tmp->operationdonebycreator == 1 && flag == 0){ //controllo che sia il creatore e abbia fatto come ultima operazione openFile con O_CREATE
-            if(serverstate->free_space >= filesize){
+            if(storage_state->free_space >= filesize){
                 tmp->size = filesize;
                 tmp->contents = malloc((filesize+1)*sizeof(char));
                 strcpy(tmp->contents, filebuffer);
                 tmp->operationdonebycreator++;
 
-                serverstate->free_space = serverstate->free_space - filesize;
-                serverstate->used_space = serverstate->used_space + filesize;
+                storage_state->free_space = storage_state->free_space - filesize;
+                storage_state->used_space = storage_state->used_space + filesize;
             }
             else{
                 //politica di rimpiazzo
@@ -534,7 +535,7 @@ int wrt(int cfd, char pathname[]){
 int cls(int cfd, char pathname[]){
     int answer = 0;
     File_t* tmp;
-    if((tmp = icl_hash_find(storage_server, pathname))== NULL){
+    if((tmp = hashtableFind(storage_server, pathname))== NULL){
         fprintf(stderr,"file not present\n");
         answer = -1; //ENOENT
     }else{
@@ -553,7 +554,7 @@ int rd(int cfd, char pathname[]){
     File_t* tmp;
     int answer = 0;
     int size = -1;
-    if((tmp = icl_hash_find(storage_server, pathname) )!= NULL){
+    if((tmp = hashtableFind(storage_server, pathname) )!= NULL){
         if(findNode(&tmp->openby, cfd) == 0){
             size = tmp->size;
         }
@@ -563,6 +564,7 @@ int rd(int cfd, char pathname[]){
     CHECK_EQ_EXIT(writen(cfd, &answer, sizeof(int)), -1, "writen rd");
     if(answer != 0) return answer;
 
+    printf("%d\n", size);
     CHECK_EQ_EXIT(writen(cfd, &size, sizeof(int)), -1, "writen rd");
     CHECK_EQ_EXIT(writen(cfd, tmp->contents, tmp->size), -1, "writen rd");
     return 0;
@@ -572,16 +574,16 @@ int rm(int cfd, char pathname[]){
     int answer = 0;
     File_t* tmp;
     
-    if((tmp = icl_hash_find(storage_server, pathname)) == NULL){
+    if((tmp = hashtableFind(storage_server, pathname)) == NULL){
         fprintf(stderr,"file not present\n");
         answer = -1; //ENOENT
     }else{
         int filesize = tmp->size;
-        icl_hash_delete(storage_server, pathname, freeFile);
+        hashtableDeleteNode(storage_server, pathname);
         
-        serverstate->num_file--;
-        serverstate->used_space = serverstate->used_space - filesize;
-        serverstate->free_space = serverstate->free_space + filesize;
+        storage_state->num_file--;
+        storage_state->used_space = storage_state->used_space - filesize;
+        storage_state->free_space = storage_state->free_space + filesize;
     }
     CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen rm", -1);
     return answer;

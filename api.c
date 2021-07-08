@@ -162,8 +162,9 @@ int readFile(const char* pathname, void** buf, size_t* size){
         errno = EPERM;
         return -1;
     }else{
-        int bufsize;
+        int bufsize; //LETTURA DI TROPPI BYTE
         CHECK_EQ_EXIT((readn(fd_socket, &bufsize, sizeof(int))), -1, "readn readFile");
+        //printf("%d\n", bufsize);
         *buf = malloc(bufsize*sizeof(char));
         CHECK_EQ_EXIT((readn(fd_socket, *buf, sizeof(buf))), -1, "readn readFile");
         *size = bufsize;
@@ -217,7 +218,7 @@ int writeFile(const char* pathname, const char* dirname){
     stat(pathname, &st);
     file_size = st.st_size;
     if(file_size > 0){
-        char* file_buffer = malloc((file_size+1)*sizeof(char));
+        char* file_buffer = malloc((file_size)*sizeof(char));
          if (file_buffer==NULL) {
             errno=ENOTRECOVERABLE;
             return -1;

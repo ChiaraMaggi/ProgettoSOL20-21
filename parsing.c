@@ -22,6 +22,7 @@ Info_t* initInfo(){
     config->max_file = 0;
     config->storage_size = 0;
     config->socket_name = malloc(MAX_LEN * sizeof(char));
+    config->num_buckets = 0;
     return config;
 }
 
@@ -88,11 +89,16 @@ int parsConfiguration(char* filepath, Info_t* config){
             if(strcmp(parameter, "STORAGE_SIZE") == 0)
                 checkAndSet(&config->storage_size, value, "STORAGE_SIZE", check, number);    
                 
-            /*caso: SocketName*/ //come va fatto il path assoluto del socket?
+            /*caso: SocketName*/
             if(strcmp(parameter, "SOCKET_NAME") == 0){
                 if(strcmp(value, ""))
                     strcpy(config->socket_name, value);
                 else fprintf(stderr, "socket path is an empty string\n");
+            }
+
+            /*caso: NumBuckets*/
+            if(strcmp(parameter, "NUM_BUCKETS") == 0){
+                checkAndSet(&config->num_buckets, value, "NUM_BUCKETS", check, number);
             }
         }
         strcpy(parameter, "");
@@ -103,7 +109,7 @@ int parsConfiguration(char* filepath, Info_t* config){
     free(value);
     free(buff);
     /*controllo se tutte le variabili hanno assunto un valore*/
-    if((config->workers_thread == 0) || (config->max_file == 0) || (config->storage_size == 0) || (!strcmp(config->socket_name, ""))){
+    if((config->workers_thread == 0) || (config->max_file == 0) || (config->storage_size == 0) || (!strcmp(config->socket_name, "")) || (config->num_buckets == 0)){
         return -1;
     }
     return 0;
