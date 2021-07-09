@@ -47,7 +47,7 @@ int main(int argc, char* argv[]){
         printf("One command is necessary: use -h for see the options\n");
         return 0;
     }
-    int flag_h=0, flag_p=0, flag_d=0, flag_r=0, flag_R=0, flag_f=0;
+    int flag_h=0, flag_p=0, flag_d=0, flag_r=0, flag_R=0, flag_f=0, flag_t=0;
     char* dir_r = NULL;
 
     for(int i=0; i<argc; i++){
@@ -57,6 +57,7 @@ int main(int argc, char* argv[]){
         if(strcmp(argv[i], "-r") == 0) flag_r = i;
         if(strcmp(argv[i], "-R") == 0) flag_R = i;
         if(strcmp(argv[i], "-f") == 0) flag_f = i;
+        if(strcmp(argv[i], "-t") == 0) flag_t = i;
     }
     if(flag_h > 0){
         printf("-f filesocketname\n-w dirname[,n=0]\n-W file1[,file2]\n-r file1[,file2]\n-R [n=0]\n-d dirname\n-t time\n-l file1[,file2]\n-u file1[,file2]\n-c file1[,file2]\n-p\n");
@@ -88,8 +89,15 @@ int main(int argc, char* argv[]){
         return 0;
     }
 
+    long tempo = 0;
+    if(flag_t > 0){
+        if(isNumber(argv[flag_t+1], &tempo) != 0){
+            fprintf(stderr, "%s is not a number", argv[flag_t+1]);
+            return 0;
+        }else tempo = tempo/1000;
+    }
+
     int opt; 
-    int answer;
     while((opt = getopt(argc, argv, ":hf:w:W:D:r:R:d:t:l:u:c:p")) != -1){ //opstring contine le opzioni che vogliamo gestire
         //se getop trova una delle opzioni ritrona un intero (relativo al carattere letto) quindi posso fare lo switch
         char dir_w[MAX_DIR_LEN];
@@ -105,7 +113,7 @@ int main(int argc, char* argv[]){
                         fprintf(stderr, "Impossible to parse -w correctly\n");
                     break;
                 }
-                answer = arg_w(dir_w, &numFileToSend);
+                arg_w(dir_w, &numFileToSend);
                /* if(print_flag){
                     if(answer == -1)
                         fprintf(stderr, "Operation: -w, outcome: negative\n");
@@ -113,7 +121,7 @@ int main(int argc, char* argv[]){
                 }*/
                 break;
             case 'W':
-                answer = arg_W(optarg);
+                arg_W(optarg);
                 /*if(print_flag){
                     if(answer == -1)
                         fprintf(stderr, "Operation: -W, outcome: negative\n");
@@ -124,7 +132,7 @@ int main(int argc, char* argv[]){
                 fprintf(stderr, "Operation -D not supported\n");
                 break;
             case 'r':
-                answer = arg_r(optarg, dir_r);
+                arg_r(optarg, dir_r);
                 /*if(print_flag){
                     if(answer == -1)
                         fprintf(stderr, "Operation: -r outcome: negative\n");
@@ -144,7 +152,7 @@ int main(int argc, char* argv[]){
                 fprintf(stderr, "Operation -u not supported\n");
                 break;
             case 'c':
-                answer = arg_c(optarg);
+                arg_c(optarg);
                 /*if(print_flag){
                     if(answer == -1)
                         fprintf(stderr, "Operation: -c, outcome: negative\n");
@@ -168,6 +176,7 @@ int main(int argc, char* argv[]){
             } break;
             default:;
         }
+        if(tempo != 0) sleep(tempo);
     }
     if(closeConnection("SOLsocket.sk") == -1){
         perror("ERROR closing connection");
@@ -321,9 +330,9 @@ int arg_r(char* optarg, char* dir){
         }
 
         //READ FILE
-        char* buf;
-        size_t size = 0;
-        if(readFile(resolvedpath,(void**)&buf,&size) != 0){
+        char* buf = NULL;
+        size_t size;
+        if(readFile(resolvedpath,(void**)&buf, &size) != 0){
             perror("ERROR reading file");
             if(print_flag) fprintf(stderr, "Operation: -r, file: %s, outcome: negative\n", token);
             token = strtok_r(NULL, ",", &tmpstr);
@@ -333,27 +342,19 @@ int arg_r(char* optarg, char* dir){
             char* filename = basename(resolvedpath);
             char path[PATH_MAX];
             sprintf(path, "%s/%s", dir, filename);
-            int fd_file;
             mkdir(dir, 0777);
+            FILE* f;
             //CREA FILE SE NON ESISTE
-            if((fd_file = open(path, O_CREAT|O_WRONLY, 0666)) == -1){
-                perror("open");
+            if((f = fopen(path, "w")) == NULL){
+                perror("fopen");
                 if(print_flag) printf("Request to write the file %s on disk failed\n", token);
                 token = strtok_r(NULL, ",", &tmpstr);
-                close(fd_file);
-                //free(buf);
                 continue;
+            }else{
+                fprintf(f, "%s", buf);
+                fclose(f);
             }
-
-            if(writen(fd_file, buf, size) == -1){
-                perror("writen");
-                if(print_flag) printf("Request to write the file %s on disk failed\n", token);
-                token = strtok_r(NULL, ",", &tmpstr);
-                close(fd_file);
-                //free(buf);
-                continue;
-            }
-			close(fd_file);
+            free(buf);
     	}
         if(closeFile(resolvedpath) != 0) perror("ERROR closing file");
         if(print_flag) fprintf(stdout, "Operation: -r, outcome: positive, readen files: %s, size readen: %ld\n", token, size);

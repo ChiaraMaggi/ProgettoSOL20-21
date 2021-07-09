@@ -162,12 +162,11 @@ int readFile(const char* pathname, void** buf, size_t* size){
         errno = EPERM;
         return -1;
     }else{
-        int bufsize; //LETTURA DI TROPPI BYTE
+        int bufsize = 0; //LETTURA DI TROPPI BYTE
         CHECK_EQ_EXIT((readn(fd_socket, &bufsize, sizeof(int))), -1, "readn readFile");
-        //printf("%d\n", bufsize);
-        *buf = malloc(bufsize*sizeof(char));
-        CHECK_EQ_EXIT((readn(fd_socket, *buf, sizeof(buf))), -1, "readn readFile");
         *size = bufsize;
+        *buf = malloc((bufsize+1)*sizeof(char));
+        CHECK_EQ_EXIT((readn(fd_socket, *buf, bufsize)), -1, "readn readFile");
     }
     return 0;
 }

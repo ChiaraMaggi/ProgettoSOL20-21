@@ -36,59 +36,63 @@
 #define DEFAULT_NUM_BUCKETS 100
 
 /*================================== STRUTTURE UTILI ====================================================*/
-typedef struct QueueNode{
+typedef struct queueNode{
 	int data;
-	struct QueueNode* next;
-}QueueNode_t;
+	struct queueNode* next;
+}queueNode_t;
 
 //campo "data" nella struttura del nodo della hashtable
-typedef struct File{
+typedef struct file{
     int fdcreator;
     int operationdonebycreator;
-    QueueNode_t* openby;
+    queueNode_t* openby;
     char* contents;
     int size;
-}File_t;
+}file_t;
 
-typedef struct Serverstate{
+typedef struct serverstate{
    int num_file;
    size_t used_space;
    size_t free_space;
-}Serverstate_t;
+}serverstate_t;
 
-typedef struct Statistics{
+typedef struct statistics{
     int max_saved_file;
     int max_mbytes;
     int switches;
-}Statistics_t;
+}statistics_t;
 
 /*================================== VARIABILI GLOBALI ==================================================*/
 Hashtable_t* storage_server;
 Info_t* info;
-Serverstate_t* storage_state;
+serverstate_t* storage_state;
 int listenfd;
-QueueNode_t* clientQueue;
+queueNode_t* clientQueue;
 pthread_t* workers;
 static int pipefd[2];
 int active_threads = 0;
 int clients =0;
 int n_client_online;
 volatile sig_atomic_t term = 0; //FLAG SETTATO DAL GESTORE DEI SEGNALI DI TERMINAZIONE
-pthread_mutex_t lockcoda = PTHREAD_MUTEX_INITIALIZER;		
 pthread_cond_t notempty = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t queueclientmtx = PTHREAD_MUTEX_INITIALIZER;	
+pthread_mutex_t servermtx = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t serverstatemtx = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t serverfilemtx = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t serverbucketsmtx = PTHREAD_MUTEX_INITIALIZER;
 
 /*=================================== FUNZIONI UTILI ====================================================*/
 void setDefault(Info_t* info);
-Serverstate_t* initServerstate(long size);
-File_t* createFile(int fd);
+serverstate_t* initServerstate(long size);
+file_t* createFile(int fd);
 void cleanup(Info_t* info);
 int updatemax(fd_set set, int fdmax); 
-void insertNode (QueueNode_t** list, int data);  
-int removeNode (QueueNode_t** list);
-int findNode(QueueNode_t** list, int data);
+void insertNode (queueNode_t** list, int data);  
+int removeNode (queueNode_t** list);
+int findNode(queueNode_t** list, int data);
 void freeFile(void* file);
-void removeNodeByKey(QueueNode_t** list, int data);
-int length(QueueNode_t** list);
+void removeNodeByKey(queueNode_t** list, int data);
+int length(queueNode_t** list);
 static void gestore_term (int signum);
 void* workerFunction(void* args);   
 int opn(type_t req, int cfd, char pathname[]); 
@@ -253,16 +257,16 @@ void setDefault(Info_t* info){
     info->num_buckets = DEFAULT_NUM_BUCKETS;
 }
 
-Serverstate_t* initServerstate(long size){
-    Serverstate_t* serverstate = malloc(sizeof(Serverstate_t));
+serverstate_t* initServerstate(long size){
+    serverstate_t* serverstate = malloc(sizeof(serverstate_t));
     serverstate->num_file = 0;
     serverstate->free_space = size;
     serverstate->used_space = 0;
     return serverstate;
 }
 
-File_t* createFile(int fd){
-    File_t* file = malloc(sizeof(File_t));
+file_t* createFile(int fd){
+    file_t* file = malloc(sizeof(file_t));
     file->fdcreator = fd;
     file->operationdonebycreator++;
     insertNode(&file->openby, fd);
@@ -272,10 +276,10 @@ File_t* createFile(int fd){
 }
 
 void freeFile(void* file){
-    File_t* data = file;
+    file_t* data = file;
     free(data->contents);
-    QueueNode_t* curr = data->openby;
-    QueueNode_t* prec;
+    queueNode_t* curr = data->openby;
+    queueNode_t* prec;
     while(curr != NULL){
         prec = curr;
         curr = curr->next;
@@ -295,12 +299,10 @@ int updatemax(fd_set set, int fdmax) {
     return -1;
 }
 
-void insertNode (QueueNode_t** list, int data) {
-    //printf("Inserisco in coda\n");
-    //fflush(stdout);
+void insertNode (queueNode_t** list, int data) {
     //PRENDO LOCK
-    SYSCALL_PTHREAD(pthread_mutex_lock(&lockcoda),"Lock coda");
-    QueueNode_t* new = malloc (sizeof(QueueNode_t));
+    SYSCALL_PTHREAD(pthread_mutex_lock(&queueclientmtx),"Lock coda");
+    queueNode_t* new = malloc (sizeof(queueNode_t));
     if (new==NULL) {
         perror("malloc");
         exit(EXIT_FAILURE);
@@ -313,22 +315,20 @@ void insertNode (QueueNode_t** list, int data) {
     //INVIO SIGNAL
     SYSCALL_PTHREAD(pthread_cond_signal(&notempty),"Signal coda");
     //RILASCIO LOCK
-    pthread_mutex_unlock(&lockcoda);
+    pthread_mutex_unlock(&queueclientmtx);
     
 }
 
-int removeNode (QueueNode_t** list) {
+int removeNode (queueNode_t** list) {
     //PRENDO LOCK
-    SYSCALL_PTHREAD(pthread_mutex_lock(&lockcoda),"Lock coda");
+    SYSCALL_PTHREAD(pthread_mutex_lock(&queueclientmtx),"Lock coda");
     //ASPETTO CONDIZIONE VERIFICATA 
     while (clientQueue==NULL) {
-        pthread_cond_wait(&notempty,&lockcoda);
-        //printf("Consumatore Svegliato\n");
-        //fflush(stdout);
+        pthread_cond_wait(&notempty,&queueclientmtx);
     }
     int data;
-    QueueNode_t* curr = *list;
-    QueueNode_t* prev = NULL;
+    queueNode_t* curr = *list;
+    queueNode_t* prev = NULL;
     while (curr->next != NULL) {
         prev = curr;
         curr = curr->next;
@@ -343,57 +343,45 @@ int removeNode (QueueNode_t** list) {
         free(curr);
     }
     //RILASCIO LOCK
-    pthread_mutex_unlock(&lockcoda);
+    pthread_mutex_unlock(&queueclientmtx);
     return data;
 }
 
-int findNode (QueueNode_t** list, int data){
-    SYSCALL_PTHREAD(pthread_mutex_lock(&lockcoda),"Lock coda");
-    QueueNode_t* curr = *list;
+int findNode (queueNode_t** list, int data){
+    SYSCALL_PTHREAD(pthread_mutex_lock(&queueclientmtx),"Lock coda");
+    queueNode_t* curr = *list;
     while (curr != NULL) {
         if(curr->data == data){
-            pthread_mutex_unlock(&lockcoda);
+            pthread_mutex_unlock(&queueclientmtx);
             return 0;
         }
         curr = curr->next;
     }
     //RILASCIO LOCK
-    pthread_mutex_unlock(&lockcoda);
+    pthread_mutex_unlock(&queueclientmtx);
     return -1;
 }
 
-void removeNodeByKey(QueueNode_t** list, int data){
+void removeNodeByKey(queueNode_t** list, int data){
     //PRENDO LOCK
-    SYSCALL_PTHREAD(pthread_mutex_lock(&lockcoda),"Lock coda");
+    SYSCALL_PTHREAD(pthread_mutex_lock(&queueclientmtx),"Lock coda");
     //ASPETTO CONDIZIONE VERIFICATA 
-    QueueNode_t* curr = *list;
-    QueueNode_t* prev = NULL;
+    queueNode_t* curr = *list;
+    queueNode_t* prev = NULL;
     while (curr != NULL) {
         if(curr->data == data){
             if(prev == NULL){
                 *list = curr->next;
             }else prev->next = curr->next;
             free(curr);
-            pthread_mutex_unlock(&lockcoda);
+            pthread_mutex_unlock(&queueclientmtx);
             return;
         }
         prev = curr;
         curr = curr->next;
     }
     //RILASCIO LOCK
-    pthread_mutex_unlock(&lockcoda);
-}
-
-int length(QueueNode_t** list){
-    SYSCALL_PTHREAD(pthread_mutex_lock(&lockcoda),"Lock coda");
-    QueueNode_t* curr = *list;
-    int c = 0;
-    while(curr != NULL){
-        c++;
-        curr = curr->next;
-    }
-    pthread_mutex_unlock(&lockcoda);
-    return c;
+    pthread_mutex_unlock(&queueclientmtx);
 }
 
 static void gestore_term (int signum) {
@@ -464,15 +452,15 @@ void* workerFunction(void* args){
 
 int opn(type_t req, int cfd, char pathname[]){
     int answer = 0;
-    File_t* tmp;
+    file_t* tmp;
     if(req == OPENC){
         if((tmp = hashtableFind(storage_server, pathname)) != NULL){
             fprintf(stderr,"file still in the storage\n");
             answer = -3; //EEXIST
         }else{
             if(storage_state->num_file < info->max_file){
-                File_t* file = createFile(cfd);
-                hashtableInsert(storage_server, pathname, strlen(pathname)*sizeof(char), file, sizeof(File_t));
+                file_t* file = createFile(cfd);
+                hashtableInsert(storage_server, pathname, strlen(pathname)*sizeof(char), file, sizeof(file_t));
                 storage_state->num_file++;
             }else{
                 //politica di rimpiazzo
@@ -504,7 +492,7 @@ int wrt(int cfd, char pathname[]){
     }
     CHECK_EQ_RETURN(readn(cfd, filebuffer, filesize+1), -1, "readn wrt", -1);
     //printf("%s", filebuffer);
-    File_t* tmp;
+    file_t* tmp;
     if((tmp = hashtableFind(storage_server, pathname)) != NULL){
         int flag = findNode(&tmp->openby, cfd);
         if(tmp->fdcreator == cfd && tmp->operationdonebycreator == 1 && flag == 0){ //controllo che sia il creatore e abbia fatto come ultima operazione openFile con O_CREATE
@@ -514,8 +502,8 @@ int wrt(int cfd, char pathname[]){
                 strcpy(tmp->contents, filebuffer);
                 tmp->operationdonebycreator++;
 
-                storage_state->free_space = storage_state->free_space - filesize;
-                storage_state->used_space = storage_state->used_space + filesize;
+                storage_state->free_space -=  filesize;
+                storage_state->used_space += filesize;
             }
             else{
                 //politica di rimpiazzo
@@ -534,7 +522,7 @@ int wrt(int cfd, char pathname[]){
 
 int cls(int cfd, char pathname[]){
     int answer = 0;
-    File_t* tmp;
+    file_t* tmp;
     if((tmp = hashtableFind(storage_server, pathname))== NULL){
         fprintf(stderr,"file not present\n");
         answer = -1; //ENOENT
@@ -551,7 +539,7 @@ int cls(int cfd, char pathname[]){
 }
 
 int rd(int cfd, char pathname[]){
-    File_t* tmp;
+    file_t* tmp;
     int answer = 0;
     int size = -1;
     if((tmp = hashtableFind(storage_server, pathname) )!= NULL){
@@ -572,7 +560,7 @@ int rd(int cfd, char pathname[]){
 
 int rm(int cfd, char pathname[]){
     int answer = 0;
-    File_t* tmp;
+    file_t* tmp;
     
     if((tmp = hashtableFind(storage_server, pathname)) == NULL){
         fprintf(stderr,"file not present\n");
