@@ -18,6 +18,7 @@
 #include<fcntl.h>
 #include <sys/stat.h>
 #include<limits.h>
+#include<libgen.h>
 
 #include "utils.h"
 #include "api.h"
@@ -192,31 +193,35 @@ int readNFiles(int N, const char* dirname){
     
     int n = 0; //numero di file concordato con il server
     CHECK_EQ_EXIT(readn(fd_socket, &n, sizeof(int)), -1, "readn readNFile");
-    for(int i=0; i<n; i++){
+    int cont = n;
+    while(cont > 0){
         int len;
         CHECK_EQ_EXIT(readn(fd_socket, &len, sizeof(int)), -1, "readn readNFile");
         char* pathname = malloc(len*sizeof(char));
-        CHECK_EQ_EXIT(readn(fd_socket, pathname, sizeof(pathname)), -1, "readn readNFile");
+        CHECK_EQ_EXIT(readn(fd_socket, pathname, len*sizeof(char)), -1, "readn readNFile");
 
+        if(dirname != NULL)
+            mkdir(dirname, 0777);
         char path[PATH_MAX];
-        sprintf(path, "%s/%s", dirname, pathname);
-        mkdir(dirname, 0777);
+        char* filename = basename(pathname);
+        sprintf(path, "%s/%s", dirname, filename);
         FILE* f;
         //CREA FILE SE NON ESISTE
         if((f = fopen(path, "w")) == NULL){
             perror("fopen");
             continue;
         }else{
-            size_t filesize;
-            CHECK_EQ_EXIT(readn(fd_socket, &filesize, sizeof(size_t)), -1, "readn readNFile");
+            int filesize;
+            CHECK_EQ_EXIT(readn(fd_socket, &filesize, sizeof(int)), -1, "readn readNFile");
             char* buf = malloc((filesize+1)*sizeof(char));
-            CHECK_EQ_EXIT(readn(fd_socket, buf, sizeof(buf)), -1, "readn readNFile");
+            CHECK_EQ_EXIT(readn(fd_socket, buf, filesize), -1, "readn readNFile");
             fprintf(f, "%s", buf);
             free(buf);
         }
         fclose(f);
+        cont--;
     }
-    return 0;
+    return n;
 }
 
 

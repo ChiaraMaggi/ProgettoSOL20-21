@@ -441,6 +441,7 @@ void* workerFunction(void* args){
             case READN:
                 printf("LETTURA N FILE\n");
                 answer = rdn(cfd, request.info);
+                break;
             default:
                 fprintf(stderr, "invalid request\n");
                 break;
@@ -584,25 +585,23 @@ int rm(int cfd, char pathname[]){
 
 int rdn(int cfd, char info[]){
     int n = atoi(info);
-    printf("%d", n);
     if(n > storage_state->num_file || n == 0) n = storage_state->num_file;
     CHECK_EQ_EXIT(writen(cfd, &n, sizeof(int)), -1, "writen rdn");
     Node_t *bucket, *curr;
     int i = 0;
-    while(i<storage_server->numbuckets && n > 0) {
+    while(i<storage_server->numbuckets && n > 0){
         bucket = storage_server->buckets[i];
-        for(curr=bucket; curr!=NULL; ) {
-            char* path = basename(bucket->key);
-            int len = strlen(path);
+        for(curr=bucket; curr!=NULL; curr=curr->next){
+            int len = strlen(bucket->key)+1;
             CHECK_EQ_EXIT(writen(cfd, &len, sizeof(int)), -1, "writen rdn");
-            CHECK_EQ_EXIT(writen(cfd, path, sizeof(path)), -1, "writen rdn");
+            CHECK_EQ_EXIT(writen(cfd, (char*)bucket->key, len*sizeof(char)), -1, "writen rdn");
             
             file_t* tmp = bucket->data;
             CHECK_EQ_EXIT(writen(cfd, &tmp->size, sizeof(int)), -1, "writen rdn");
             CHECK_EQ_EXIT(writen(cfd, tmp->contents, tmp->size), -1, "writen rdn");
-            curr=curr->next;
             n--;
         }
+        i++;
     }
     return 0;
 }

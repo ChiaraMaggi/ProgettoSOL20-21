@@ -358,7 +358,7 @@ int arg_r(char* optarg, char* dir){
             free(buf);
     	}
         if(closeFile(resolvedpath) != 0) perror("ERROR closing file");
-        if(print_flag) fprintf(stdout, "Operation: -r, outcome: positive, readen files: %s, size readen: %ld\n", token, size);
+        if(print_flag) fprintf(stdout, "Operation: -r, outcome: positive, readen files: %s, size read: %ld\n", token, size);
         token = strtok_r(NULL,",",&tmpstr);
     }
     return 0;
@@ -383,7 +383,7 @@ int arg_c(char* optarg){
             token = strtok_r(NULL, ",", &tmpstr);
             continue; 
         }
-        if(print_flag) fprintf(stdout, "Operation: -c, outcome: positive, removed files: %s\n", file);
+        if(print_flag) fprintf(stdout, "Operation: -c, outcome: positive, removed file: %s\n", file);
         token = strtok_r(NULL, ",", &tmpstr);
     }
     return 0;
@@ -395,9 +395,11 @@ int arg_R(char* optarg, char* dir){
         if(print_flag) fprintf(stderr, "Operation: -R, outcome: negative");
         return -1;
     }
-    if(readNFiles(n, dir) != 0){
+    if((n = readNFiles(n, dir)) == -1){
         perror("ERROR reading N file");
-        if(print_flag) fprintf(stderr, "Operation: -r, outcome: negative\n");
+        if(print_flag) fprintf(stderr, "Operation: -R, outcome: negative\n");
+    }else{
+        if(print_flag) fprintf(stderr, "Operation: -R, outcome: positive, read files: %lu\n", n);
     }    
     return 0;
 }
