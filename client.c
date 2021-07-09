@@ -41,6 +41,7 @@ int arg_w(char* dirname, long* fileToSend);
 int arg_W(char* optarg);
 int arg_r(char* optarg, char* dir);
 int arg_c(char* optarg);
+int arg_R(char* optarg, char* dir);
 
 int main(int argc, char* argv[]){
     if(argc == 1){
@@ -140,6 +141,7 @@ int main(int argc, char* argv[]){
                 }*/
                 break;
             case 'R':
+                arg_R(optarg, dir_r);
                 break;
             case 'd':
                 break;
@@ -164,8 +166,7 @@ int main(int argc, char* argv[]){
             case ':': {//quando l'operazione da eseguire appartiene a quelle da poter eseguire ma manca l'argomento
                 switch(optopt){ //optopt variabile interna di getopt che contiene le operazioni che non sono gestite
                     case 'R':
-                        break;
-                    case 't':
+                        arg_R(0, dir_r);
                         break;
                     default:
                         fprintf(stderr, "Option '-%c' needs an argoument\n", optopt); 
@@ -385,5 +386,18 @@ int arg_c(char* optarg){
         if(print_flag) fprintf(stdout, "Operation: -c, outcome: positive, removed files: %s\n", file);
         token = strtok_r(NULL, ",", &tmpstr);
     }
+    return 0;
+}
+
+int arg_R(char* optarg, char* dir){
+    long n;
+    if(isNumber(optarg, &n) != 0){
+        if(print_flag) fprintf(stderr, "Operation: -R, outcome: negative");
+        return -1;
+    }
+    if(readNFiles(n, dir) != 0){
+        perror("ERROR reading N file");
+        if(print_flag) fprintf(stderr, "Operation: -r, outcome: negative\n");
+    }    
     return 0;
 }

@@ -17,6 +17,7 @@
 #include<stdarg.h>
 #include<fcntl.h>
 #include <sys/stat.h>
+#include<limits.h>
 
 #include "utils.h"
 #include "api.h"
@@ -75,7 +76,7 @@ int closeConnection(const char* sockname){
     if(strncmp(server_address.sun_path, sockname, strlen(sockname)+1) ==  0){
         request_t request;
         request.req = CLOSECONN;
-        strcpy(request.pathname, sockname);
+        strcpy(request.info, sockname);
         CHECK_EQ_EXIT((writen(fd_socket, &request, sizeof(request_t))), -1, "writen closeConnection");
     
         int answer = -1;
@@ -118,7 +119,7 @@ int openFile(const char* pathname, int flags){
 
     request_t request;
     request.req = req;
-    strcpy(request.pathname, pathname);
+    strcpy(request.info, pathname);
     CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(request_t))), -1, "writen openFile", -1);
 
     int answer = -1;  //risposta server
@@ -150,7 +151,7 @@ int readFile(const char* pathname, void** buf, size_t* size){
 
     request_t request;
     request.req = READ;
-    strcpy(request.pathname, pathname);
+    strcpy(request.info, pathname);
     CHECK_EQ_EXIT((writen(fd_socket, &request, sizeof(request_t))), -1, "writen readFile");
 
     int answer = -1;
@@ -176,7 +177,47 @@ client. Se il server ha meno di ‘N’ file disponibili, li invia tutti. Se N<=
 quella di leggere tutti i file memorizzati al suo interno. Ritorna un valore maggiore o uguale a 0 in
 caso di successo (cioè ritorna il n. di file effettivamente letti), -1 in caso di fallimento, errno viene 
 settato opportunamente.*/
-//int readNFiles(int N, const char* dirname)
+int readNFiles(int N, const char* dirname){
+    if(connectionOn != 1){
+        errno=ENOTCONN;
+        return -1;
+    }
+   
+    request_t request;
+    request.req = READN;
+    char number[100];
+    sprintf(number, "%d", N);
+    strcpy(request.info, number);
+    CHECK_EQ_EXIT(writen(fd_socket, &request, sizeof(request_t)), -1, "writen readNFile");
+    
+    int n = 0; //numero di file concordato con il server
+    CHECK_EQ_EXIT(readn(fd_socket, &n, sizeof(int)), -1, "readn readNFile");
+    for(int i=0; i<n; i++){
+        int len;
+        CHECK_EQ_EXIT(readn(fd_socket, &len, sizeof(int)), -1, "readn readNFile");
+        char* pathname = malloc(len*sizeof(char));
+        CHECK_EQ_EXIT(readn(fd_socket, pathname, sizeof(pathname)), -1, "readn readNFile");
+
+        char path[PATH_MAX];
+        sprintf(path, "%s/%s", dirname, pathname);
+        mkdir(dirname, 0777);
+        FILE* f;
+        //CREA FILE SE NON ESISTE
+        if((f = fopen(path, "w")) == NULL){
+            perror("fopen");
+            continue;
+        }else{
+            size_t filesize;
+            CHECK_EQ_EXIT(readn(fd_socket, &filesize, sizeof(size_t)), -1, "readn readNFile");
+            char* buf = malloc((filesize+1)*sizeof(char));
+            CHECK_EQ_EXIT(readn(fd_socket, buf, sizeof(buf)), -1, "readn readNFile");
+            fprintf(f, "%s", buf);
+            free(buf);
+        }
+        fclose(f);
+    }
+    return 0;
+}
 
 
 
@@ -208,7 +249,7 @@ int writeFile(const char* pathname, const char* dirname){
 
     request_t request;
     request.req = WRITE;
-    strcpy(request.pathname, pathname);
+    strcpy(request.info, pathname);
     CHECK_EQ_EXIT((writen(fd_socket, &request, sizeof(request_t))), -1, "writen writeFile");
 
     int answer = -1;
@@ -266,7 +307,7 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
 
     request_t request;
     request.req = APPEND;
-    strcpy(request.pathname, pathname);
+    strcpy(request.info, pathname);
     CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(request_t))), -1, "writen appendToFile", -1);
 
     CHECK_EQ_RETURN((writen(fd_socket, &size, sizeof(size_t))), -1, "writen appendFile", -1);    
@@ -306,7 +347,7 @@ int closeFile(const char* pathname){
     
     request_t request;
     request.req = CLOSE;
-    strcpy(request.pathname, pathname);
+    strcpy(request.info, pathname);
     CHECK_EQ_EXIT((writen(fd_socket, &request, sizeof(request_t))), -1, "writen closeFiles");
 
     int answer = -1;
@@ -336,7 +377,7 @@ int removeFile(const char* pathname){
 
     request_t request;
     request.req = REMOVE;
-    strcpy(request.pathname, pathname);
+    strcpy(request.info, pathname);
     CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(request_t))), -1, "writen removeFile", -1);
 
     int answer = -1;

@@ -8,6 +8,7 @@
 #include<pthread.h>
 #include<unistd.h>
 #include<sys/types.h>
+#include<limits.h>
 
 #define UNIX_PATH_MAX 108
 #define SOMAXCON 100
@@ -100,11 +101,11 @@
  * @return  0 ok  1 non e' un numbero   2 overflow/underflow
  */
 
-typedef enum {OPEN, OPENC, CLOSECONN, WRITE, APPEND, READ, CLOSE, REMOVE}type_t;
+typedef enum {OPEN, OPENC, CLOSECONN, WRITE, APPEND, READ, CLOSE, REMOVE, READN}type_t;
 
 typedef struct request{
     type_t req;
-    char pathname[MAX_DIM];
+    char info[PATH_MAX];
 } request_t;
 
 int isNumber(const char*, long*);
