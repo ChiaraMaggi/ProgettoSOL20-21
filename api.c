@@ -200,26 +200,27 @@ int readNFiles(int N, const char* dirname){
         char* pathname = malloc(len*sizeof(char));
         CHECK_EQ_EXIT(readn(fd_socket, pathname, len*sizeof(char)), -1, "readn readNFile");
 
-        if(dirname != NULL)
+        int filesize;
+        CHECK_EQ_EXIT(readn(fd_socket, &filesize, sizeof(int)), -1, "readn readNFile");
+        char* buf = malloc((filesize+1)*sizeof(char));
+        CHECK_EQ_EXIT(readn(fd_socket, buf, filesize), -1, "readn readNFile");
+        if(dirname != NULL){
             mkdir(dirname, 0777);
-        char path[PATH_MAX];
-        char* filename = basename(pathname);
-        sprintf(path, "%s/%s", dirname, filename);
-        FILE* f;
-        //CREA FILE SE NON ESISTE
-        if((f = fopen(path, "w")) == NULL){
-            perror("fopen");
-            continue;
-        }else{
-            int filesize;
-            CHECK_EQ_EXIT(readn(fd_socket, &filesize, sizeof(int)), -1, "readn readNFile");
-            char* buf = malloc((filesize+1)*sizeof(char));
-            CHECK_EQ_EXIT(readn(fd_socket, buf, filesize), -1, "readn readNFile");
-            fprintf(f, "%s", buf);
-            free(buf);
+            char path[PATH_MAX];
+            char* filename = basename(pathname);
+            sprintf(path, "%s/%s", dirname, filename);
+            FILE* f;
+            //CREA FILE SE NON ESISTE
+            if((f = fopen(path, "w")) == NULL){
+                perror("fopen");
+                continue;
+            }else{
+                fprintf(f, "%s", buf);
+                free(buf);
+            }
+            fclose(f);
         }
-        fclose(f);
-        cont--;
+        cont --;
     }
     return n;
 }
@@ -285,6 +286,9 @@ int writeFile(const char* pathname, const char* dirname){
             return -1;
         }else if(answer == -2){
             errno = EPERM;
+            return -1;
+        } else if(answer == -4){
+            errno = EFBIG;
             return -1;
         } else return 0;
     }else{

@@ -45,7 +45,7 @@ typedef struct queueNode{
 //campo "data" nella struttura del nodo della hashtable
 typedef struct file{
     int fdcreator;
-    int operationdonebycreator;
+    long index;
     queueNode_t* openby;
     char* contents;
     int size;
@@ -53,13 +53,12 @@ typedef struct file{
 
 typedef struct serverstate{
    int num_file;
-   size_t used_space;
-   size_t free_space;
+   int free_space;
 }serverstate_t;
 
 typedef struct statistics{
     int max_saved_file;
-    int max_mbytes;
+    int max_bytes;
     int switches;
 }statistics_t;
 
@@ -67,6 +66,7 @@ typedef struct statistics{
 Hashtable_t* storage_server;
 Info_t* info;
 serverstate_t* storage_state;
+statistics_t* statistics;
 int listenfd;
 queueNode_t* clientQueue;
 pthread_t* workers;
@@ -74,6 +74,7 @@ static int pipefd[2];
 int active_threads = 0;
 int clients =0;
 int n_client_online;
+long count = 0;
 volatile sig_atomic_t term = 0; //FLAG SETTATO DAL GESTORE DEI SEGNALI DI TERMINAZIONE
 pthread_cond_t notempty = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t queueclientmtx = PTHREAD_MUTEX_INITIALIZER;	
@@ -84,7 +85,8 @@ pthread_mutex_t serverbucketsmtx = PTHREAD_MUTEX_INITIALIZER;
 
 /*=================================== FUNZIONI UTILI ====================================================*/
 void setDefault(Info_t* info);
-serverstate_t* initServerstate(long size);
+serverstate_t* initServerstate(int size);
+statistics_t* initStatistics();
 file_t* createFile(int fd);
 void cleanup(Info_t* info);
 int updatemax(fd_set set, int fdmax); 
@@ -93,7 +95,7 @@ int removeNode (queueNode_t** list);
 int findNode(queueNode_t** list, int data);
 void freeFile(void* file);
 void removeNodeByKey(queueNode_t** list, int data);
-int length(queueNode_t** list);
+char* getMinIndex(Hashtable_t* hashtable);
 static void gestore_term (int signum);
 void* workerFunction(void* args);   
 int opn(type_t req, int cfd, char pathname[]); 
@@ -148,6 +150,7 @@ int main(int argc, char* argv[]){
     
     storage_server = hashtableInit(info->num_buckets, hashFunction, hashCompare);
     storage_state = initServerstate(info->storage_size);
+    statistics = initStatistics();
 
     //THREAD POOL
     CHECK_EQ_EXIT((workers = (pthread_t*)malloc(sizeof(pthread_t) * info->workers_thread)), NULL, "Creazione Thread Pool\n");
@@ -259,18 +262,26 @@ void setDefault(Info_t* info){
     info->num_buckets = DEFAULT_NUM_BUCKETS;
 }
 
-serverstate_t* initServerstate(long size){
+serverstate_t* initServerstate(int size){
     serverstate_t* serverstate = malloc(sizeof(serverstate_t));
     serverstate->num_file = 0;
     serverstate->free_space = size;
-    serverstate->used_space = 0;
     return serverstate;
 }
+
+statistics_t* initStatistics(){
+    statistics_t* statistics = malloc(sizeof(statistics_t));
+    statistics->max_bytes = 0;
+    statistics->max_saved_file = 0;
+    statistics->switches = 0;
+    return statistics;
+}
+
 
 file_t* createFile(int fd){
     file_t* file = malloc(sizeof(file_t));
     file->fdcreator = fd;
-    file->operationdonebycreator++;
+    file->index = count++; //se accesso concorrente?
     insertNode(&file->openby, fd);
     file->contents = NULL;
     file->size = 0;
@@ -386,6 +397,24 @@ void removeNodeByKey(queueNode_t** list, int data){
     pthread_mutex_unlock(&queueclientmtx);
 }
 
+char* getMinIndex(Hashtable_t* hashtable){
+    Node_t *bucket, *curr;
+    char* key;
+    long min = LONG_MAX;
+    for(int i=0; i<hashtable->numbuckets; i++) {
+        bucket = hashtable->buckets[i];
+        for(curr=bucket; curr!=NULL; curr=curr->next) {
+            file_t* curr = bucket->data;
+            if(curr->index < min){
+                min = curr->index;
+                key = malloc(strlen(bucket->key)*sizeof(char));
+                strcpy(key, bucket->key);
+            }
+        }
+    }
+    return key;
+}
+
 static void gestore_term (int signum) {
     if (signum==SIGINT || signum==SIGQUIT) {
         term = 1;
@@ -459,6 +488,7 @@ void* workerFunction(void* args){
 int opn(type_t req, int cfd, char pathname[]){
     int answer = 0;
     file_t* tmp;
+    char* key;
     if(req == OPENC){
         if((tmp = hashtableFind(storage_server, pathname)) != NULL){
             fprintf(stderr,"file still in the storage\n");
@@ -468,8 +498,18 @@ int opn(type_t req, int cfd, char pathname[]){
                 file_t* file = createFile(cfd);
                 hashtableInsert(storage_server, pathname, strlen(pathname)*sizeof(char), file, sizeof(file_t));
                 storage_state->num_file++;
+                if(storage_state->num_file > statistics->max_saved_file) statistics->max_saved_file = storage_state->num_file;
             }else{
                 //politica di rimpiazzo
+                key = getMinIndex(storage_server);
+                printf("replacement policy on %s\n", key);
+                statistics->switches++;
+                hashtableDeleteNode(storage_server, (void*)key);
+                storage_state->num_file--;
+                file_t* file = createFile(cfd);
+                hashtableInsert(storage_server, pathname, strlen(pathname)*sizeof(char), file, sizeof(file_t));
+                storage_state->num_file++;
+                if(storage_state->num_file > statistics->max_saved_file) statistics->max_saved_file = storage_state->num_file;
             }
         }
     }
@@ -497,22 +537,29 @@ int wrt(int cfd, char pathname[]){
         return -1;
     }
     CHECK_EQ_RETURN(readn(cfd, filebuffer, filesize+1), -1, "readn wrt", -1);
-    //printf("%s", filebuffer);
     file_t* tmp;
     if((tmp = hashtableFind(storage_server, pathname)) != NULL){
         int flag = findNode(&tmp->openby, cfd);
-        if(tmp->fdcreator == cfd && tmp->operationdonebycreator == 1 && flag == 0){ //controllo che sia il creatore e abbia fatto come ultima operazione openFile con O_CREATE
-            if(storage_state->free_space >= filesize){
+        if(tmp->fdcreator == cfd && flag == 0){ //controllo che sia il creatore e abbia aperto il file
+            if(filesize > info->storage_size){
+                fprintf(stderr, "file too large for the size of storage");
+                answer = -4;
+            }
+            else{
+                while(storage_state->free_space < filesize){
+                    char* key = getMinIndex(storage_server);
+                    file_t* tmp1 = hashtableFind(storage_server, (void*) key);
+                    int size = tmp1->size;
+                    printf("replacement policy on %s\n",(char*)key);
+                    statistics->switches++;
+                    hashtableDeleteNode(storage_server, (void*)key);
+                    storage_state->free_space += size;
+                    storage_state->num_file--;
+                }
                 tmp->size = filesize;
                 tmp->contents = malloc((filesize+1)*sizeof(char));
                 strcpy(tmp->contents, filebuffer);
-                tmp->operationdonebycreator++;
-
-                storage_state->free_space -=  filesize;
-                storage_state->used_space += filesize;
-            }
-            else{
-                //politica di rimpiazzo
+                storage_state->free_space -= filesize;
             }
         }else{
             fprintf(stderr, "operation not authorized for client %d\n", cfd);
@@ -576,7 +623,6 @@ int rm(int cfd, char pathname[]){
         hashtableDeleteNode(storage_server, pathname);
         
         storage_state->num_file--;
-        storage_state->used_space = storage_state->used_space - filesize;
         storage_state->free_space = storage_state->free_space + filesize;
     }
     CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen rm", -1);

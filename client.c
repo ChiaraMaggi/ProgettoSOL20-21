@@ -259,6 +259,7 @@ int arg_w(char* dirname, long* fileToSend){
             if(writeFile(resolvedpath, NULL) != 0){
                 perror("ERROR writing file");
                 if(print_flag) fprintf(stderr, "Operation: -w, outcome: negative\n");
+                removeFile(resolvedpath);
                 continue;
             }
             if(closeFile(resolvedpath) != 0) perror("ERROR closing file");

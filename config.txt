@@ -4,10 +4,10 @@
 NUM_WORKERS_THREAD = 100
 
 -Max Number of Files:
-MAX_NUM_FILE = 200
+MAX_NUM_FILE = 3
 
 -Storage Size (in Byte):
-STORAGE_SIZE = 512
+STORAGE_SIZE = 300
 
 -Socket Name:
 SOCKET_NAME = ./SOLsocket.sk
