@@ -6,7 +6,7 @@ NUM_WORKERS_THREAD = 100
 -Max Number of Files:
 MAX_NUM_FILE = 3
 
--Storage Size (in Byte):
+-Storage Size (in MByte):
 STORAGE_SIZE = 300
 
 -Socket Name:

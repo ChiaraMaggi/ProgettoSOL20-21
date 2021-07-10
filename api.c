@@ -237,7 +237,7 @@ int writeFile(const char* pathname, const char* dirname){
         return -1;
     }
     if(dirname != NULL){
-        fprintf(stderr, "operatione -D not implemented\n");
+        fprintf(stderr, "Operation -D not implemented\n");
     }
 
     if (connectionOn != 1) {
