@@ -1,16 +1,16 @@
 --File Storage Server Configuration--
 
 -Number of Workers Thread:
-NUM_WORKERS_THREAD = 100
+NUM_WORKERS_THREAD = 1
 
 -Max Number of Files:
-MAX_NUM_FILE = 3
+MAX_NUM_FILE = 10000
 
 -Storage Size (in MByte):
-STORAGE_SIZE = 300
+STORAGE_SIZE = 128
 
 -Socket Name:
 SOCKET_NAME = ./SOLsocket.sk
 
 -Number of buckets for hashtable:
-NUM_BUCKETS = 100
+NUM_BUCKETS = 1000

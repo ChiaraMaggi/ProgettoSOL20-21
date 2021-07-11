@@ -23,10 +23,8 @@
 #include<libgen.h>
 #include<fcntl.h>
 
-#include "parsing.h"
 #include "utils.h"
 #include "api.h"
-#include "icl_hash.h"
 
 #define O_CREATE 01
 #define MAX_DIR_LEN 200
@@ -79,12 +77,8 @@ int main(int argc, char* argv[]){
     }
 
     if(flag_f > 0){
-        if(arg_f(argv[flag_f+1]) == -1){
-            fprintf(stderr, "Connection failed\n");
+        if(arg_f(argv[flag_f+1]) == -1)
             return 0;
-        }else{
-            fprintf(stdout, "Connected correctly\n");
-        }
     }else{
         fprintf(stderr, "Impossible to satisfy the request if the name of socket is not declared\n");
         return 0;
@@ -179,7 +173,7 @@ int main(int argc, char* argv[]){
         }
         if(tempo != 0) sleep(tempo);
     }
-    if(closeConnection("SOLsocket.sk") == -1){
+    if(closeConnection(argv[flag_f+1]) == -1){
         perror("ERROR closing connection");
         return (EXIT_FAILURE);
     }
@@ -229,7 +223,10 @@ int arg_w(char* dirname, long* fileToSend){
     struct stat statbuf;
     int r;
     char resolvedpath[PATH_MAX];
-    CHECK_EQ_EXIT((r = stat(dirname, &statbuf)), -1, "stat arg_w");
+    if((r = stat(dirname, &statbuf)) == -1){
+        perror("stat arg_w");
+        if(print_flag) fprintf(stderr, "Operation: -w, outcome: negative\n");
+    }
     if(!S_ISDIR(statbuf.st_mode)){
         if(print_flag) printf("%s is not a directory\n", dirname);
         return -1;
@@ -393,7 +390,7 @@ int arg_c(char* optarg){
 int arg_R(char* optarg, char* dir){
     long n;
     if(isNumber(optarg, &n) != 0){
-        if(print_flag) fprintf(stderr, "Operation: -R, outcome: negative");
+        if(print_flag) fprintf(stderr, "Operation: -R, outcome: negative\n");
         return -1;
     }
     if((n = readNFiles(n, dir)) == -1){

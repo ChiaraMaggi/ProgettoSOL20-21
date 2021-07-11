@@ -56,6 +56,7 @@ typedef struct file{
 typedef struct serverstate{
    int num_file;
    int free_space;
+   int used_space;
 }serverstate_t;
 
 typedef struct statistics{
@@ -77,6 +78,9 @@ int active_threads = 0;
 int clients =0;
 int n_client_online;
 long count = 0;
+int max_fd = 0;
+fd_set set;
+fd_set tmpset;
 volatile sig_atomic_t term = 0; //FLAG SETTATO DAL GESTORE DEI SEGNALI DI TERMINAZIONE
 pthread_cond_t notempty = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t queueclientmtx = PTHREAD_MUTEX_INITIALIZER;	
@@ -111,6 +115,7 @@ int rdn(int cfd, char info[]);
 /*===================================================== MAIN ==========================================*/
 int main(int argc, char* argv[]){
     //--------GESTIONE SEGNALI---------//
+    
     struct sigaction s;
     sigset_t sigset;
     s.sa_handler = gestore_term;
@@ -118,7 +123,7 @@ int main(int argc, char* argv[]){
     CHECK_EQ_EXIT(pthread_sigmask(SIG_SETMASK,&sigset,NULL), -1, "pthread_sigmask");
     memset(&s,0,sizeof(s));
 
-   // CHECK_EQ_EXIT(sigaction(SIGINT,&s,NULL), -1, "sigaction");
+    CHECK_EQ_EXIT(sigaction(SIGINT,&s,NULL), -1, "sigaction");
     CHECK_EQ_EXIT(sigaction(SIGQUIT,&s,NULL), -1, "sigaction");
     CHECK_EQ_EXIT(sigaction(SIGHUP,&s,NULL), -1, "sigaction"); //TERMINAZIONE SOFT
 
@@ -165,9 +170,6 @@ int main(int argc, char* argv[]){
     unlink(info->socket_name);
 
     /*---------------------------------CREAZIONE SOCKET-----------------------------------*/
-    int max_fd = 0;
-    fd_set set;
-    fd_set tmpset;
 	
     struct sockaddr_un sa;
     memset(&sa, '0', sizeof(sa));
@@ -217,7 +219,7 @@ int main(int argc, char* argv[]){
         for(int i=0; i<=max_fd; i++){
             if(FD_ISSET(i, &tmpset)){ 
                 if(i == listenfd){ //nuova richiesta di connessione
-                    printf("new request from new client\n");
+                    //printf("new request from new client\n");
                     if((cfd = accept(listenfd, (struct sockaddr*)NULL, NULL)) == -1){
                         if(term == 1) break;
                         else if(term == 2){
@@ -227,7 +229,7 @@ int main(int argc, char* argv[]){
                     FD_SET(cfd, &set); //aggiungo descrittore al master set
                     if(cfd > max_fd) max_fd = cfd;
                     clients++;
-                    printf("new connection accepted: client %d\n", cfd);
+                    printf("New connection accepted: client %d\n", cfd);
 
                 }else if(i == pipefd[0]){ //è una scrittura sulla pipe
                     int fdfrompipe;
@@ -288,6 +290,7 @@ serverstate_t* initServerstate(int size){
     serverstate_t* serverstate = malloc(sizeof(serverstate_t));
     serverstate->num_file = 0;
     serverstate->free_space = size;
+    serverstate->used_space = 0;
     return serverstate;
 }
 
@@ -476,53 +479,54 @@ void* workerFunction(void* args){
         if(readn(cfd, &request, sizeof(request_t)) == -1){
             request.req = -1;
         }
-        printf("REQUEST %d from client %d: ", request.req, cfd);
+        //printf("REQUEST %d from client %d: ", request.req, cfd);
         switch (request.req){
             case OPEN:
-                printf("APERTURA FILE\n");
+                //printf("APERTURA FILE %s\n", request.info);
                 opn(OPEN, cfd, request.info);
                 break;
             case OPENC:
-                printf("CREAZIONE FILE\n");
+                //printf("CREAZIONE FILE %s\n", request.info);
                 answer = opn(OPENC, cfd, request.info);
                 break;
             case CLOSECONN:
-                printf("CHIUSURA CONNESSIONE\n");
+                //printf("CHIUSURA CONNESSIONE\n");
                 writen(cfd, &answer, sizeof(int));
+                if(cfd == max_fd) max_fd = updatemax(set, max_fd); //se fd rimosso era il max devo trovare un nuovo max
                 close(cfd);
                 break;
             case WRITE:
-                printf("SCRITTURA FILE\n");
+                //printf("SCRITTURA FILE %s\n", request.info);
                 answer = wrt(cfd, request.info);
                 break;
             case APPEND:
                 break;
             case READ:
-                printf("LETTURA FILE\n");
+                //printf("LETTURA FILE %s\n", request.info);
                 answer = rd(cfd, request.info);
                 break;
             case CLOSE:
-                printf("CHIUSURA FILE\n");
+                //printf("CHIUSURA FILE %s\n", request.info);
                 answer = cls(cfd, request.info);
                 break;
             case REMOVE:
-                printf("RIMOZIONE FILE\n");
+                //printf("RIMOZIONE FILE %s\n", request.info);
                 answer = rm(cfd, request.info);
                 break;
             case READN:
-                printf("LETTURA N FILE\n");
+                //printf("LETTURA N FILE\n");
                 answer = rdn(cfd, request.info);
                 break;
             default:
-                fprintf(stderr, "invalid request\n");
+                fprintf(stderr, "Invalid request\n");
                 break;
         }
-        if(answer != 0) fprintf(stderr, "impossible to satisfy the request %d\n", request.req);
+        //if(answer != 0) fprintf(stderr, "impossible to satisfy the request %d\n", request.req);
         if(request.req != CLOSECONN){
             writen(pipefd[1], &cfd, sizeof(int));
         }
-        hashtablePrint(cache);
-        printf("\n");
+        //hashtablePrint(cache);
+        //printf("\n");
     }
     return 0;
 }
@@ -535,7 +539,7 @@ int opn(type_t req, int cfd, char pathname[]){
         LOCK(&cachemtx);
         if((tmp = hashtableFind(cache, pathname)) != NULL){
             UNLOCK(&cachemtx)
-            fprintf(stderr,"file still in the storage\n");
+            //fprintf(stderr,"File still in the storage\n");
             answer = -3; //EEXIST
         }else{
             file_t* file = createFile(cfd);
@@ -572,7 +576,7 @@ int opn(type_t req, int cfd, char pathname[]){
         LOCK(&cachemtx);
         if((tmp = hashtableFind(cache, pathname)) == NULL){
             UNLOCK(&cachemtx);
-            fprintf(stderr, "file not present in the storage\n");
+            //fprintf(stderr, "File not present in the storage\n");
             answer = -1; //ENOENT
         }
         else{
@@ -600,17 +604,14 @@ int wrt(int cfd, char pathname[]){
     file_t* tmp;
     LOCK(&cachemtx);
     if((tmp = hashtableFind(cache, pathname)) != NULL){
-        LOCK(&tmp->filemtx);
-        UNLOCK(&cachemtx);
         int flag = findNode(&tmp->openby, cfd);
         if(tmp->fdcreator == cfd && flag == 0){ //controllo che sia il creatore e abbia aperto il file
             if(filesize > info->storage_size){
-                UNLOCK(&tmp->filemtx);
-                fprintf(stderr, "file too large for the size of storage");
+                UNLOCK(&cachemtx);
+                //fprintf(stderr, "File too large for the size of storage\n");
                 answer = -4;
             }
             else{
-                LOCK(&cachemtx);
                 LOCK(&cachestatemtx);
                 while(cache_state->free_space < filesize){
                     char* key = getMinIndex(cache);
@@ -619,27 +620,31 @@ int wrt(int cfd, char pathname[]){
                     printf("replacement policy on %s\n",(char*)key);
                     LOCK(&statisticsmtx);
                     statistics->switches++;
+                    UNLOCK(&statisticsmtx);
                     hashtableDeleteNode(cache, (void*)key);
                     cache_state->free_space += size;
+                    cache_state->used_space -= size;
                     cache_state->num_file--;
-                    UNLOCK(&statisticsmtx);
                 }
-                UNLOCK(&cachemtx);
                 tmp->size = filesize;
                 tmp->contents = malloc((filesize+1)*sizeof(char));
                 strcpy(tmp->contents, filebuffer);
-                UNLOCK(&tmp->filemtx);
+                UNLOCK(&cachemtx);
                 cache_state->free_space -= filesize;
+                cache_state->used_space += filesize;
+                LOCK(&statisticsmtx);
+                if(statistics->max_bytes < cache_state->used_space) statistics->max_bytes = cache_state->used_space;
+                UNLOCK(&statisticsmtx);
                 UNLOCK(&cachestatemtx);
             }
         }else{
-            UNLOCK(&tmp->filemtx);
-            fprintf(stderr, "operation not authorized for client %d\n", cfd);
+            UNLOCK(&cachemtx);
+            //fprintf(stderr, "Operation not authorized for client %d\n", cfd);
             answer = -2; //EPERM
         }
     }else{
         UNLOCK(&cachemtx);
-        fprintf(stderr, "file not found in the storage\n");
+        //fprintf(stderr, "File not found in the storage\n");
         answer = -1; //ENOENT
     }
     CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen wrt", -1);
@@ -652,14 +657,14 @@ int cls(int cfd, char pathname[]){
     LOCK(&cachemtx);
     if((tmp = hashtableFind(cache, pathname)) == NULL){
         UNLOCK(&cachemtx);
-        fprintf(stderr,"file not present\n");
+        //fprintf(stderr,"File not present\n");
         answer = -1; //ENOENT
     }else{
         LOCK(&tmp->filemtx);
         UNLOCK(&cachemtx);
         if(findNode(&tmp->openby, cfd) == -1){
             UNLOCK(&tmp->filemtx);
-            fprintf(stderr, "the client %d doesnt't have the file open\n", cfd);
+            //fprintf(stderr, "The client %d doesnt't have the file open\n", cfd);
             answer = -2; //EPERM
         }else{
             removeNodeByKey(&tmp->openby, cfd);
@@ -693,7 +698,6 @@ int rd(int cfd, char pathname[]){
     CHECK_EQ_EXIT(writen(cfd, &answer, sizeof(int)), -1, "writen rd");
     if(answer != 0) return answer;
 
-    printf("%d\n", size);
     CHECK_EQ_EXIT(writen(cfd, &size, sizeof(int)), -1, "writen rd");
     CHECK_EQ_EXIT(writen(cfd, tmp->contents, tmp->size), -1, "writen rd");
     return 0;
@@ -705,7 +709,7 @@ int rm(int cfd, char pathname[]){
     LOCK(&cachemtx);
     if((tmp = hashtableFind(cache, pathname)) == NULL){
         UNLOCK(&cachemtx);
-        fprintf(stderr,"file not found in the storage\n");
+        //fprintf(stderr,"File not found in the storage\n");
         answer = -1; //ENOENT
     }else{
         int filesize = tmp->size;

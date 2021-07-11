@@ -179,9 +179,8 @@ void hashtablePrint(const Hashtable_t* hashtable){
     for(i=0; i<hashtable->numbuckets; i++) {
         bucket = hashtable->buckets[i];
         for(curr=bucket; curr!=NULL; ) {
-                fprintf(stdout, "%s -> ", (char *)curr->key);
+                fprintf(stdout, "%s\n", (char *)curr->key);
             curr=curr->next;
-            printf("\n");
         }
     }
     return;
