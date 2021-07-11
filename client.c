@@ -87,7 +87,7 @@ int main(int argc, char* argv[]){
     long tempo = 0;
     if(flag_t > 0){
         if(isNumber(argv[flag_t+1], &tempo) != 0){
-            fprintf(stderr, "%s is not a number", argv[flag_t+1]);
+            fprintf(stderr, "%s is not a number \n", argv[flag_t+1]);
             return 0;
         }else tempo = tempo/1000;
     }
@@ -109,30 +109,15 @@ int main(int argc, char* argv[]){
                     break;
                 }
                 arg_w(dir_w, &numFileToSend);
-               /* if(print_flag){
-                    if(answer == -1)
-                        fprintf(stderr, "Operation: -w, outcome: negative\n");
-                    else fprintf(stdout, "Operation: -w, outcome: postive, used directory: %s\n", dir_w);
-                }*/
                 break;
             case 'W':
                 arg_W(optarg);
-                /*if(print_flag){
-                    if(answer == -1)
-                        fprintf(stderr, "Operation: -W, outcome: negative\n");
-                    else fprintf(stdout, "Operation: -W, outcome: positive, writen files: %s\n", optarg);
-                }*/
                 break; 
             case 'D':
                 fprintf(stderr, "Operation -D not supported\n");
                 break;
             case 'r':
                 arg_r(optarg, dir_r);
-                /*if(print_flag){
-                    if(answer == -1)
-                        fprintf(stderr, "Operation: -r outcome: negative\n");
-                    else fprintf(stdout, "Operation: -r, outcome: positive, readen files: %s\n", optarg);
-                }*/
                 break;
             case 'R':
                 arg_R(optarg, dir_r);
@@ -149,23 +134,18 @@ int main(int argc, char* argv[]){
                 break;
             case 'c':
                 arg_c(optarg);
-                /*if(print_flag){
-                    if(answer == -1)
-                        fprintf(stderr, "Operation: -c, outcome: negative\n");
-                    else fprintf(stdout, "Operation: -c, outcome: positive, removed files: %s\n", optarg);
-                }*/
                 break;
             case 'p':
                 break;
-            case ':': {//quando l'operazione da eseguire appartiene a quelle da poter eseguire ma manca l'argomento
+            case ':'://quando l'operazione da eseguire appartiene a quelle da poter eseguire ma manca l'argomento
                 switch(optopt){ //optopt variabile interna di getopt che contiene le operazioni che non sono gestite
                     case 'R':
-                        arg_R(0, dir_r);
+                        arg_R("0", dir_r);
                         break;
                     default:
                         fprintf(stderr, "Option '-%c' needs an argoument\n", optopt); 
                 } break;
-            }
+            break;
             case '?':{ //getopt ritrona ? quando l'operazione da eseguire non appartiene alla opstring
                 fprintf(stderr, "'-%c' is an invalid option \n", optopt); 
             } break;

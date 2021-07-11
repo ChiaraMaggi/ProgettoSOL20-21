@@ -27,10 +27,10 @@ $prefix -W test/esempio1
 $prefix -d readdir1 -r test/esempio2
 
 #lettura di tutti i file del server
-$prefix -R -d readdir2 
+$prefix -d readdir2 -R
 
 #lettura di N file del server
-$prefix -R 3 -d readdir3
+$prefix -d readdir3 -R 3
 
 #lettura di un file inesistente (la richiesta deve fallire)
 $prefix -r pippo

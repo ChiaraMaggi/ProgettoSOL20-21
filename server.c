@@ -229,23 +229,14 @@ int main(int argc, char* argv[]){
                     FD_SET(cfd, &set); //aggiungo descrittore al master set
                     if(cfd > max_fd) max_fd = cfd;
                     clients++;
-                    printf("New connection accepted: client %d\n", cfd);
+                    printf("\nNew connection accepted: client %d\n", cfd);
 
                 }else if(i == pipefd[0]){ //è una scrittura sulla pipe
                     int fdfrompipe;
                     int len;
                     if((len = readn(pipefd[0], &fdfrompipe, sizeof(int))) != -1){
-                        //CHECK_EQ_EXIT(read(pipefd[0], &flag, sizeof(flag)), -1, "read pipe");
-                        /*if(flag == -1){
-                            printf("closing connection with client\n");
-                            FD_CLR(fdfrompipe, &set);
-                            if(fdfrompipe == max_fd) max_fd = updatemax(set, max_fd); //se fd rimosso era il max devo trovare un nuovo max
-                            close(fdfrompipe); 
-                            clients--;
-                        }else{*/
-                            FD_SET(fdfrompipe, &set);
-                            if(fdfrompipe > max_fd) max_fd = fdfrompipe;
-                       /* }*/
+                        FD_SET(fdfrompipe, &set);
+                        if(fdfrompipe > max_fd) max_fd = fdfrompipe;
                     }else if(len == -1){
                         perror("read pipe");
                         exit(EXIT_FAILURE);
