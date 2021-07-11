@@ -66,10 +66,8 @@ cleanall:
 	-rm -f *.o *.a *~ *.sk $(TARGET)
 
 test1: $(TARGET)
-	clear
 	./server -f configtest1.txt &
 	./test1.sh
-	@killall -HUP -w server
 	@printf "\ntest1 terminato\n"
 
 test2: $(TARGET)

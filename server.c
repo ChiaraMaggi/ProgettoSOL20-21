@@ -112,10 +112,11 @@ int cls(int cfd, char pathname[]);
 int rm(int cfd, char pathname[]);
 int rdn(int cfd, char info[]);
 
+
 /*===================================================== MAIN ==========================================*/
 int main(int argc, char* argv[]){
     //--------GESTIONE SEGNALI---------//
-    
+/*
     struct sigaction s;
     sigset_t sigset;
     s.sa_handler = gestore_term;
@@ -132,7 +133,16 @@ int main(int argc, char* argv[]){
     CHECK_EQ_EXIT(sigaction(SIGPIPE,&s,NULL), -1, "sigaction");
 
     CHECK_EQ_EXIT(sigemptyset(&sigset), -1, "sigemptyset");
-    SYSCALL_PTHREAD(pthread_sigmask(SIG_SETMASK,&sigset,NULL),"pthread_sigmask");
+    SYSCALL_PTHREAD(pthread_sigmask(SIG_SETMASK,&sigset,NULL),"pthread_sigmask");*/
+
+    struct sigaction s;
+    s.sa_handler = gestore_term;
+    sigemptyset(&s.sa_mask);
+    s.sa_flags = SA_RESTART;
+    sigaction(SIGINT, &s, NULL);
+    sigaction(SIGQUIT, &s, NULL);
+    sigaction(SIGHUP, &s, NULL);
+    sigaction(SIGPIPE, &s, NULL);
 
     /*-----------CONFIGUARZIONE SERVER-----------------*/
     info = initInfo();
@@ -202,12 +212,14 @@ int main(int argc, char* argv[]){
             else if (term==2) { 
                 if (clients==0) break;
                 else {
-                        printf("Chiusura Soft...\n");
-                        FD_CLR(listenfd, &set);
-                        if (listenfd == max_fd) max_fd = updatemax(set,max_fd);
-                        close(listenfd);
-                        tmpset = set;
-                        SYSCALL_BREAK(select(max_fd+1,&tmpset,NULL,NULL,NULL),"Errore select"); 
+                    printf("Chiusura Soft...\n");
+                    FD_CLR(listenfd, &set);
+                    if (listenfd == max_fd) max_fd = updatemax(set,max_fd);
+                    tmpset = set;
+                    for (int i=0;i<info->workers_thread;i++) {
+                        insertNode(&clientQueue, -1);
+                    }
+                    break;
                 }
             }else {
                 perror("select");
@@ -247,12 +259,16 @@ int main(int argc, char* argv[]){
                 }
             }
         }
+        //printf("%d\n", term);
     }
-    for (int i=0;i<info->workers_thread;i++) {
-        SYSCALL_PTHREAD(pthread_join(workers[i],NULL),"Errore join thread");
+    
+    if(term == 2){
+        for (int i=0;i<info->workers_thread;i++) {
+            SYSCALL_PTHREAD(pthread_join(workers[i],NULL),"Errore join thread");
+        }
     }
 
-    printf("---------STATISTICS SERVER----------\n");
+    printf("\n---------STATISTICS SERVER----------\n");
     printf("Max number of file saved: %d\n",statistics->max_saved_file);
     printf("Max size of Mbytes saved: %f\n",(statistics->max_bytes/pow(10,6)));
     printf("Number of swithes from the replace policy: %d\n",statistics->switches);

@@ -101,7 +101,7 @@
  * @return  0 ok  1 non e' un numbero   2 overflow/underflow
  */
 
-typedef enum {OPEN, OPENC, CLOSECONN, WRITE, APPEND, READ, CLOSE, REMOVE, READN}type_t;
+typedef enum {OPEN, OPENC, CLOSECONN, WRITE, APPEND, READ, CLOSE, REMOVE, READN, EXIT}type_t;
 
 typedef struct request{
     type_t req;
