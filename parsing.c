@@ -13,9 +13,7 @@
 #include "parsing.h"
 #include "utils.h"
 
-/*
-Iniziallizazione della struct contenete le infromazioni di configurazione
-*/
+//Iniziallizazione della struct contenete le infromazioni di configurazione
 Info_t* initInfo(){
     Info_t* config = malloc(sizeof(Info_t));
     config->workers_thread = 0;
@@ -26,17 +24,13 @@ Info_t* initInfo(){
     return config;
 }
 
-/*
-Libera la memoria della struct Info_t
-*/
+//Libera la memoria della struct Info_t
 void freeInfo(Info_t* config){
     free(config->socket_name);
     free(config);
 }
 
-/*
-Gestione dell'errore del controllo se il valore inserito e' un numero e settaggio
-*/
+//Gestione dell'errore del controllo se il valore inserito e' un numero e settaggio
 void checkAndSet(int* x, char* value, char* var, int check, int n){
     if(check == 1)
         fprintf(stderr, "value for %s not valid: %s is not a number\n",var ,value);
