@@ -6,6 +6,7 @@ Il file storage server è implementato come un singolo processo multi-threaded i
 Ogni client mantiene una sola connessione verso il server sulla quale invia una o più richieste relative ai file memorizzati nel server, ed ottiene le risposte in accordo al protocollo di comunicazione “richiesta-risposta”. Un file è identificato univocamente dal suo path assoluto.
 
 -> Comandi da eseguire nella directory principale :
+
 make : costruisce gli eseguibili "server" e "client"
 
 make test1 : avvia il primo test
@@ -16,10 +17,16 @@ make clean : elimina gli eseguibili "server" e "client"
 
 make cleanall : elimina tutti i file generati da make (eseguibili, oggetto, temporanei, librerie, ...)
 
+
+
 -> Comandi server :
+
 -f config.txt : specifica il file di config da usare
 
+
+
 ->Comandi client :
+
 -h : lista operazioni client
 
 -f filename : connettiti al socket filename
@@ -40,7 +47,10 @@ make cleanall : elimina tutti i file generati da make (eseguibili, oggetto, temp
 
 -p : abilita stampe su stdout per ogni operazione
 
+
+
 ->Struttura directory :
+
 configtest1 : contiene config.tx per il test 1
 
 configtest2 : contiene config.txt per il test 2
