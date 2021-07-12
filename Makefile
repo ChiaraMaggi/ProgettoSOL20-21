@@ -66,11 +66,12 @@ cleanall:
 	-rm -f *.o *.a *~ *.sk $(TARGET)
 
 test1: $(TARGET)
-	valgrind --leak-check=full ./server -f configtest1.txt &
-	chmod +x test1.sh 
-	./test1.sh &
+	valgrind --leak-check=full --show-leak-kinds=all ./server -f configtest1.txt & bash ./test1.sh; kill -1 $$!
+	sleep 1
+	@printf "\ntest1 terminato\n"
 
 test2: $(TARGET)
 	clear
 	./server -f configtest2.txt &
 	./test2.sh
+	@printf "\ntest2 terminato\n"

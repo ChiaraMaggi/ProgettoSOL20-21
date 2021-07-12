@@ -40,5 +40,3 @@ $prefix -c test/esempio1,test/subtest/esempio3
 
 #applicazione remove a un file non presente (la richiesta deve fallire)
 $prefix -c test/esempio3
-
-killall -s SIGHUP memcheck-amd64-

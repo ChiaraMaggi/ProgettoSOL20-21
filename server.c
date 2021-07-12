@@ -99,7 +99,7 @@ int updatemax(fd_set set, int fdmax);
 void insertNode (queueNode_t** list, int data);  
 int removeNode (queueNode_t** list);
 int findNode(queueNode_t** list, int data);
-void freeFile(void* file);
+void freeFile(file_t* file);
 void freeList(queueNode_t** list);
 void removeNodeByKey(queueNode_t** list, int data);
 char* getMinIndex(Hashtable_t* hashtable);
@@ -279,6 +279,8 @@ int main(int argc, char* argv[]){
     hashtableFree(cache);
     freeList(&clientQueue);
     free(workers);
+    free(cache_state);
+    free(statistics);
     
 
     return 0;
@@ -321,16 +323,9 @@ file_t* createFile(int fd){
     return file;
 }
 
-void freeFile(void* file){
-    file_t* data = file;
-    free(data->contents);
-    queueNode_t* curr = data->openby;
-    queueNode_t* prec;
-    while(curr != NULL){
-        prec = curr;
-        curr = curr->next;
-        free(prec);
-    }
+void freeFile(file_t* file){
+    free(file->contents);
+    freeList(&file->openby);
     free(file);
 }
 
