@@ -167,7 +167,7 @@ int readFile(const char* pathname, void** buf, size_t* size){
         int bufsize = 0; //LETTURA DI TROPPI BYTE
         CHECK_EQ_EXIT((readn(fd_socket, &bufsize, sizeof(int))), -1, "readn readFile");
         *size = bufsize;
-        *buf = malloc((bufsize+1)*sizeof(char));
+        *buf = calloc((bufsize+1),sizeof(char));
         CHECK_EQ_EXIT((readn(fd_socket, *buf, bufsize)), -1, "readn readFile");
     }
     return 0;
@@ -202,7 +202,7 @@ int readNFiles(int N, const char* dirname){
 
         int filesize;
         CHECK_EQ_EXIT(readn(fd_socket, &filesize, sizeof(int)), -1, "readn readNFile");
-        char* buf = malloc((filesize+1)*sizeof(char));
+        char* buf = calloc((filesize+1),sizeof(char));
         CHECK_EQ_EXIT(readn(fd_socket, buf, filesize), -1, "readn readNFile");
         if(dirname != NULL){
             mkdir(dirname, 0777);
@@ -220,6 +220,7 @@ int readNFiles(int N, const char* dirname){
             }
             fclose(f);
         }
+        free(pathname);
         cont --;
     }
     return n;
@@ -264,7 +265,7 @@ int writeFile(const char* pathname, const char* dirname){
     stat(pathname, &st);
     file_size = st.st_size;
     if(file_size > 0){
-        char* file_buffer = malloc((file_size)*sizeof(char));
+        char* file_buffer = malloc((file_size+1)*sizeof(char));
          if (file_buffer==NULL) {
             errno=ENOTRECOVERABLE;
             return -1;
@@ -281,6 +282,7 @@ int writeFile(const char* pathname, const char* dirname){
         CHECK_EQ_EXIT((writen(fd_socket, &file_size, sizeof(int))), -1, "writen writefile");
         CHECK_EQ_EXIT((writen(fd_socket, file_buffer, file_size+1)), -1, "writen writeFile");
         CHECK_EQ_EXIT((readn(fd_socket, &answer, sizeof(int))), -1, "readn writeFile");
+        free(file_buffer);
         if(answer == -1){
             errno = ENOENT;
             return -1;

@@ -2,13 +2,13 @@
 CC = gcc
 
 # -c serve a creare i file .o senza linkarli all'eseguibile
-CFLAGS = -std=c99 -std=gnu99 -Wall -c
+CFLAGS = -std=c99 -std=gnu99 -Wall -c -fsanitize=address -g -O1 -fno-omit-frame-pointer
 
 # questo serve a linkare la/e libreria/e all'eseguibile specificando un percorso
 # per usare questa sintassi devi chiamare la libreria lib[nome_libreria].a
-LIB = -L . -lfunzioniserver -lpthread
+LIB = -L . -lfunzioniserver -fsanitize=address -fPIE -lpthread
 
-LIB2 = -L . -lfunzioniclient -lpthread
+LIB2 = -L . -lfunzioniclient -fsanitize=address -fPIE -lpthread
 
 # file oggetto dell'eseguibile (possono essere più di 1)
 OBJ1 = server.o
@@ -66,8 +66,8 @@ cleanall:
 	-rm -f *.o *.a *~ *.sk $(TARGET)
 
 test1: $(TARGET)
-	valgrind --leak-check=full --show-leak-kinds=all ./server -f configtest1.txt & bash ./test1.sh; kill -1 $$!
-	sleep 1
+	./server -f configtest1.txt & bash ./test1.sh; kill -1 $$!
+	@sleep 1
 	@printf "\ntest1 terminato\n"
 
 test2: $(TARGET)

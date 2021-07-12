@@ -157,6 +157,8 @@ int main(int argc, char* argv[]){
         perror("ERROR closing connection");
         return (EXIT_FAILURE);
     }
+
+    free(dir_r);
     return 0;
 }
 
@@ -182,7 +184,7 @@ int parse_w(char* optarg, char* dirname, long* fileToSend){
     }
     else{
         strncpy(dirname, optarg, i);  
-        char* numFile = malloc(sizeof(char)*(strlen(optarg) - i+1));
+        char *numFile = calloc(strlen(optarg) + i, sizeof(char));
         int j = 0;
         i++;
         while(optarg[i] != '\0'){

@@ -212,7 +212,7 @@ int main(int argc, char* argv[]){
             else if (term==2) { 
                 if (clients==0) break;
                 else {
-                    printf("[SERVER] Chiusura Soft...\n");
+                    printf("\n[SERVER] Chiusura Soft...\n");
                     FD_CLR(listenfd, &set);
                     if (listenfd == max_fd) max_fd = updatemax(set,max_fd);
                     tmpset = set;
@@ -279,10 +279,7 @@ int main(int argc, char* argv[]){
     hashtableFree(cache);
     freeList(&clientQueue);
     free(workers);
-    free(cache_state);
-    free(statistics);
     
-
     return 0;
 }
 
@@ -342,9 +339,10 @@ int updatemax(fd_set set, int fdmax) {
 
 void insertNode (queueNode_t** list, int data) {
     //PRENDO LOCK
-    SYSCALL_PTHREAD(pthread_mutex_lock(&queueclientmtx),"Lock coda");
+    LOCK(&queueclientmtx);
     queueNode_t* new = malloc (sizeof(queueNode_t));
     if (new==NULL) {
+        UNLOCK(&queueclientmtx);
         perror("malloc");
         exit(EXIT_FAILURE);
     }
@@ -354,18 +352,18 @@ void insertNode (queueNode_t** list, int data) {
     //INSERISCI IN TESTA
     *list = new;
     //INVIO SIGNAL
-    SYSCALL_PTHREAD(pthread_cond_signal(&notempty),"Signal coda");
+    SIGNAL(&notempty);
     //RILASCIO LOCK
-    pthread_mutex_unlock(&queueclientmtx);
+    UNLOCK(&queueclientmtx);
     
 }
 
 int removeNode (queueNode_t** list) {
     //PRENDO LOCK
-    SYSCALL_PTHREAD(pthread_mutex_lock(&queueclientmtx),"Lock coda");
+    LOCK(&queueclientmtx);
     //ASPETTO CONDIZIONE VERIFICATA 
     while (clientQueue==NULL) {
-        pthread_cond_wait(&notempty,&queueclientmtx);
+        WAIT(&notempty,&queueclientmtx);
     }
     int data;
     queueNode_t* curr = *list;
@@ -384,22 +382,22 @@ int removeNode (queueNode_t** list) {
         free(curr);
     }
     //RILASCIO LOCK
-    pthread_mutex_unlock(&queueclientmtx);
+    UNLOCK(&queueclientmtx);
     return data;
 }
 
 int findNode (queueNode_t** list, int data){
-    SYSCALL_PTHREAD(pthread_mutex_lock(&queueclientmtx),"Lock coda");
+    LOCK(&queueclientmtx);
     queueNode_t* curr = *list;
     while (curr != NULL) {
         if(curr->data == data){
-            pthread_mutex_unlock(&queueclientmtx);
+            UNLOCK(&queueclientmtx);
             return 0;
         }
         curr = curr->next;
     }
     //RILASCIO LOCK
-    pthread_mutex_unlock(&queueclientmtx);
+    UNLOCK(&queueclientmtx);
     return -1;
 }
 
@@ -416,7 +414,7 @@ void freeList(queueNode_t** head) {
 
 void removeNodeByKey(queueNode_t** list, int data){
     //PRENDO LOCK
-    SYSCALL_PTHREAD(pthread_mutex_lock(&queueclientmtx),"Lock coda");
+    LOCK(&queueclientmtx);
     //ASPETTO CONDIZIONE VERIFICATA 
     queueNode_t* curr = *list;
     queueNode_t* prev = NULL;
@@ -426,14 +424,14 @@ void removeNodeByKey(queueNode_t** list, int data){
                 *list = curr->next;
             }else prev->next = curr->next;
             free(curr);
-            pthread_mutex_unlock(&queueclientmtx);
+            UNLOCK(&queueclientmtx);
             return;
         }
         prev = curr;
         curr = curr->next;
     }
     //RILASCIO LOCK
-    pthread_mutex_unlock(&queueclientmtx);
+    UNLOCK(&queueclientmtx);
 }
 
 char* getMinIndex(Hashtable_t* hashtable){
