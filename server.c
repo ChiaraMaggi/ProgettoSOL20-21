@@ -53,12 +53,14 @@ typedef struct file{
     int size;
 }file_t;
 
+//memorizza lo stato del server durante tutta l'esecuzione
 typedef struct serverstate{
    int num_file;
    int free_space;
    int used_space;
 }serverstate_t;
 
+//struttura per raccogliere le statistiche del server
 typedef struct statistics{
     int max_saved_file;
     int max_bytes;
@@ -75,8 +77,7 @@ queueNode_t* clientQueue;
 pthread_t* workers;
 static int pipefd[2];
 int active_threads = 0;
-int clients =0;
-int n_client_online;
+int clients = 0;
 long count = 0;
 int max_fd = 0;
 fd_set set;
@@ -89,12 +90,12 @@ pthread_mutex_t cachestatemtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t indexmtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t statisticsmtx = PTHREAD_MUTEX_INITIALIZER;
 
+
 /*=================================== FUNZIONI UTILI ====================================================*/
 void setDefault(Info_t* info);
 serverstate_t* initServerstate(int size);
 statistics_t* initStatistics();
 file_t* createFile(int fd);
-void cleanup(Info_t* info);
 int updatemax(fd_set set, int fdmax); 
 void insertNode (queueNode_t** list, int data);  
 int removeNode (queueNode_t** list);
@@ -117,7 +118,6 @@ void printlist(queueNode_t* list);
 /*===================================================== MAIN ==========================================*/
 int main(int argc, char* argv[]){
     //--------GESTIONE SEGNALI---------//
-
     struct sigaction s;
     s.sa_handler = gestore_term;
     sigemptyset(&s.sa_mask);
@@ -127,15 +127,13 @@ int main(int argc, char* argv[]){
     sigaction(SIGHUP, &s, NULL);
     sigaction(SIGPIPE, &s, NULL);
 
-    /*-----------CONFIGUARZIONE SERVER-----------------*/
+    //-----------CONFIGUARZIONE SERVER--------------//
     info = initInfo();
-
     /*caso in cui il valori passati non sono corretti o incompleti*/
     if((argc == 3 && strcmp(argv[1], "-f")) || argc == 2){
         printf("[SERVER] use: %s [-f pathconfigurationfile]\n", argv[0]);
         return EXIT_FAILURE;
     }
-
     /*caso in cui il file di congifigurazione non è passato*/
     if(argc == 1){
         printf("[SERVER] default configuration (configuration file is not passed)\n");
@@ -149,12 +147,13 @@ int main(int argc, char* argv[]){
         }    
     }
     
+    //inizializzazioni strutture 
     info->storage_size = info->storage_size*1000000;
     cache = hashtableInit(info->num_buckets, hashFunction, hashCompare);
     cache_state = initServerstate(info->storage_size);
     statistics = initStatistics();
 
-    //THREAD POOL
+    //inizializzazione e creazione thread pool
     CHECK_EQ_EXIT((workers = (pthread_t*)malloc(sizeof(pthread_t) * info->workers_thread)), NULL, "Creazione Thread Pool\n");
    
     for (int i=0; i<info->workers_thread; i++)
@@ -162,8 +161,7 @@ int main(int argc, char* argv[]){
 
     unlink(info->socket_name);
 
-    /*---------------------------------CREAZIONE SOCKET-----------------------------------*/
-	
+    //-------------------CREAZIONE SOCKET---------------------//
     struct sockaddr_un sa;
     memset(&sa, '0', sizeof(sa));
 	sa.sun_family = AF_UNIX;
@@ -237,6 +235,7 @@ int main(int argc, char* argv[]){
                         exit(EXIT_FAILURE);
                     }
                 }else{
+                    //client con una richiesta
                     insertNode(&clientQueue, i);
                     FD_CLR(i, &set);
                 }
@@ -260,12 +259,13 @@ int main(int argc, char* argv[]){
     if (close(listenfd)==-1) perror("close");
     remove(info->socket_name);
     hashtableFree(cache, freeFile);
-    //freeList(&clientQueue);
+    freeList(&clientQueue);
     free(workers);
     
     return 0;
 }
 
+//funzione che setta valori di default se il file di configurazione non è passato
 void setDefault(Info_t* info){
     info->workers_thread = DEFAULT_WORKERS_THREAD;
     info->max_file = DEFAULT_MAX_FILE;
@@ -274,6 +274,7 @@ void setDefault(Info_t* info){
     info->num_buckets = DEFAULT_NUM_BUCKETS;
 }
 
+//funzione che inizializza lo stato del server
 serverstate_t* initServerstate(int size){
     serverstate_t* serverstate = malloc(sizeof(serverstate_t));
     serverstate->num_file = 0;
@@ -282,6 +283,7 @@ serverstate_t* initServerstate(int size){
     return serverstate;
 }
 
+//funzione che inizializza le statistiche
 statistics_t* initStatistics(){
     statistics_t* statistics = malloc(sizeof(statistics_t));
     statistics->max_bytes = 0;
@@ -290,6 +292,7 @@ statistics_t* initStatistics(){
     return statistics;
 }
 
+//funzione che crea un file
 file_t* createFile(int fd){
     file_t* file = malloc(sizeof(file_t));
     file->fdcreator = fd;
@@ -318,10 +321,7 @@ void printlist(queueNode_t* list){
     }
 }
 
-void cleanup(Info_t* info) {
-    unlink(info->socket_name);
-}
-
+//funzione che monitora il valore massimo nel master set
 int updatemax(fd_set set, int fdmax) {
     for(int i=(fdmax-1);i>=0;--i)
 	if (FD_ISSET(i, &set)) return i;
@@ -329,6 +329,7 @@ int updatemax(fd_set set, int fdmax) {
     return -1;
 }
 
+//push di un nodo del tipo queueNode_t in una lista
 void insertNode (queueNode_t** list, int data) {
     //PRENDO LOCK
     LOCK(&queueclientmtx);
@@ -350,6 +351,7 @@ void insertNode (queueNode_t** list, int data) {
     
 }
 
+//pop di nodo del tipo queueNode_t da una lista
 int removeNode (queueNode_t** list) {
     //PRENDO LOCK
     LOCK(&queueclientmtx);
@@ -378,6 +380,7 @@ int removeNode (queueNode_t** list) {
     return data;
 }
 
+//trova un nodo del tipo queueNode_t in una lista
 int findNode (queueNode_t** list, int data){
     LOCK(&queueclientmtx);
     queueNode_t* curr = *list;
@@ -394,21 +397,22 @@ int findNode (queueNode_t** list, int data){
 }
 
 void freeList(queueNode_t** head) {
+    if(*head == NULL) return;
     queueNode_t* tmp;
     queueNode_t * curr = *head;
     while (curr != NULL) {
-        printf("%p\n", curr); 
         tmp = curr;
         curr = curr->next;
         free(tmp);
     }
-    *head = NULL;
+    free(curr);
 }
 
+//rimuove un nodo del tipo queueNode_t  con un certo valore da una lista
 void removeNodeByKey(queueNode_t** list, int data){
     //PRENDO LOCK
     LOCK(&queueclientmtx);
-    //ASPETTO CONDIZIONE VERIFICATA 
+
     queueNode_t* curr = *list;
     queueNode_t* prev = NULL;
     while (curr != NULL) {
@@ -427,6 +431,7 @@ void removeNodeByKey(queueNode_t** list, int data){
     UNLOCK(&queueclientmtx);
 }
 
+//funzione per gestire la politica fifo che cerca il minor indice nella hashtable
 char* getMinIndex(Hashtable_t* hashtable){
     Node_t *bucket, *curr;
     char* key = NULL;
@@ -452,6 +457,7 @@ char* getMinIndex(Hashtable_t* hashtable){
     return key;
 }
 
+//gestore della terminazione
 static void gestore_term (int signum) {
     if (signum==SIGINT || signum==SIGQUIT) {
         term = 1;
