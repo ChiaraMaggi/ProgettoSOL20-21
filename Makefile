@@ -66,12 +66,12 @@ cleanall:
 	-rm -f *.o *.a *~ *.sk $(TARGET)
 
 test1: $(TARGET)
-	./server -f configtest1.txt & bash ./script/test1.sh; kill -1 $$!
+	./server -f configfile/configtest1.txt & bash ./script/test1.sh; kill -1 $$!
 	@sleep 1
 	@printf "\ntest1 terminato\n"
 
 test2: $(TARGET)
 	clear
-	./server -f configtest2.txt &
+	./server -f configfile/configtest2.txt &
 	./script/test2.sh
 	@printf "\ntest2 terminato\n"
