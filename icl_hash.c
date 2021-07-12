@@ -111,7 +111,7 @@ void* hashtableFind(const Hashtable_t* hashtable, const void* key){
 	return NULL;
 }
 
-int hashtableDeleteNode(Hashtable_t* hashtable, const void* key){
+int hashtableDeleteNode(Hashtable_t* hashtable, char* key, void (*free_data)(void*)){
 	if (hashtableFind(hashtable, key) == 0) return 0; // nothing to delete
 	size_t hash = hashtable->hashFunction(key) % hashtable->numbuckets;
 	Node_t* curr = hashtable->buckets[hash];
@@ -122,20 +122,20 @@ int hashtableDeleteNode(Hashtable_t* hashtable, const void* key){
 			if (prec == NULL){ // curr is the first node
 				hashtable->buckets[hash] = curr->next;
 				free(curr->key);
-				if (curr->data != NULL) free(curr->data);
+				if (curr->data != NULL) free_data(curr->data);
 				free(curr);
 				return 1;
 			}
 			if (curr->next == NULL){ // curr is the last node
 				prec->next = NULL;
 				free(curr->key);
-				if (curr->data != NULL) free(curr->data);
+				if (curr->data != NULL) free_data(curr->data);
 				free(curr);
 				return 1;
 			}
 			prec->next = curr->next;
 			free(curr->key);
-			if (curr->data != NULL) free(curr->data);
+			if (curr->data != NULL) free_data(curr->data);
 			free(curr);
 			return 1;
 		}
@@ -145,7 +145,7 @@ int hashtableDeleteNode(Hashtable_t* hashtable, const void* key){
 	return 0;
 }
 
-void hashtableFree(Hashtable_t* hashtable){
+void hashtableFree(Hashtable_t *hashtable, void (*free_data)(void*)){
 	if (hashtable == NULL) return;
 	for (size_t i = 0; i < hashtable->numbuckets; i++){
 		Node_t* curr = hashtable->buckets[i];
@@ -154,7 +154,7 @@ void hashtableFree(Hashtable_t* hashtable){
 			tmp = curr;
 			curr = curr->next;
 			free(tmp->key);
-			if (tmp->data != NULL) free(tmp->data);
+			if (tmp->data != NULL) free_data(tmp->data);
 			free(tmp);
 		}
 	}

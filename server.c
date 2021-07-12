@@ -99,7 +99,7 @@ int updatemax(fd_set set, int fdmax);
 void insertNode (queueNode_t** list, int data);  
 int removeNode (queueNode_t** list);
 int findNode(queueNode_t** list, int data);
-void freeFile(file_t* file);
+void freeFile(void* f);
 void freeList(queueNode_t** list);
 void removeNodeByKey(queueNode_t** list, int data);
 char* getMinIndex(Hashtable_t* hashtable);
@@ -111,29 +111,12 @@ int rd(int cfd, char pathname[]);
 int cls(int cfd, char pathname[]);
 int rm(int cfd, char pathname[]);
 int rdn(int cfd, char info[]);
+void printlist(queueNode_t* list);
 
 
 /*===================================================== MAIN ==========================================*/
 int main(int argc, char* argv[]){
     //--------GESTIONE SEGNALI---------//
-/*
-    struct sigaction s;
-    sigset_t sigset;
-    s.sa_handler = gestore_term;
-    CHECK_EQ_EXIT(sigfillset(&sigset),-1,"sigfillset");
-    CHECK_EQ_EXIT(pthread_sigmask(SIG_SETMASK,&sigset,NULL), -1, "pthread_sigmask");
-    memset(&s,0,sizeof(s));
-
-    CHECK_EQ_EXIT(sigaction(SIGINT,&s,NULL), -1, "sigaction");
-    CHECK_EQ_EXIT(sigaction(SIGQUIT,&s,NULL), -1, "sigaction");
-    CHECK_EQ_EXIT(sigaction(SIGHUP,&s,NULL), -1, "sigaction"); //TERMINAZIONE SOFT
-
-    //ignoro SIGPIPE
-    s.sa_handler = SIG_IGN;
-    CHECK_EQ_EXIT(sigaction(SIGPIPE,&s,NULL), -1, "sigaction");
-
-    CHECK_EQ_EXIT(sigemptyset(&sigset), -1, "sigemptyset");
-    SYSCALL_PTHREAD(pthread_sigmask(SIG_SETMASK,&sigset,NULL),"pthread_sigmask");*/
 
     struct sigaction s;
     s.sa_handler = gestore_term;
@@ -276,8 +259,8 @@ int main(int argc, char* argv[]){
 
     if (close(listenfd)==-1) perror("close");
     remove(info->socket_name);
-    hashtableFree(cache);
-    freeList(&clientQueue);
+    hashtableFree(cache, freeFile);
+    //freeList(&clientQueue);
     free(workers);
     
     return 0;
@@ -320,10 +303,19 @@ file_t* createFile(int fd){
     return file;
 }
 
-void freeFile(file_t* file){
+void freeFile(void* f){
+    file_t* file = f;
     free(file->contents);
     freeList(&file->openby);
     free(file);
+}
+
+void printlist(queueNode_t* list){
+    queueNode_t* curr = list;
+    while(curr != NULL){
+        printf("%d\n", curr->data);
+        curr = curr->next;
+    }
 }
 
 void cleanup(Info_t* info) {
@@ -405,9 +397,10 @@ void freeList(queueNode_t** head) {
     queueNode_t* tmp;
     queueNode_t * curr = *head;
     while (curr != NULL) {
-       tmp = curr;
-       curr = curr->next;
-       free(tmp);
+        printf("%p\n", curr); 
+        tmp = curr;
+        curr = curr->next;
+        free(tmp);
     }
     *head = NULL;
 }
@@ -436,7 +429,7 @@ void removeNodeByKey(queueNode_t** list, int data){
 
 char* getMinIndex(Hashtable_t* hashtable){
     Node_t *bucket, *curr;
-    char* key;
+    char* key = NULL;
     long min = LONG_MAX;
     for(int i=0; i<hashtable->numbuckets; i++) {
         bucket = hashtable->buckets[i];
@@ -554,7 +547,7 @@ int opn(type_t req, int cfd, char pathname[]){
                 //politica di rimpiazzo
                 key = getMinIndex(cache);
                 printf("[SERVER]replacement policy on %s\n", key);
-                hashtableDeleteNode(cache, (void*)key);
+                hashtableDeleteNode(cache, key, freeFile);
                 hashtableInsert(cache, pathname, strlen(pathname)*sizeof(char), file, sizeof(file_t));
                 UNLOCK(&cachemtx);
 
@@ -618,7 +611,7 @@ int wrt(int cfd, char pathname[]){
                     LOCK(&statisticsmtx);
                     statistics->switches++;
                     UNLOCK(&statisticsmtx);
-                    hashtableDeleteNode(cache, (void*)key);
+                    hashtableDeleteNode(cache, key, freeFile);
                     cache_state->free_space += size;
                     cache_state->used_space -= size;
                     cache_state->num_file--;
@@ -710,7 +703,8 @@ int rm(int cfd, char pathname[]){
         answer = -1; //ENOENT
     }else{
         int filesize = tmp->size;
-        hashtableDeleteNode(cache, pathname);
+        
+        hashtableDeleteNode(cache, pathname, freeFile);
         UNLOCK(&cachemtx);
 
         LOCK(&cachestatemtx);

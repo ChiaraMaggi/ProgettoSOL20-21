@@ -36,9 +36,9 @@ void* hashtableGetEntry(const Hashtable_t*, const void*);
 
 void* hashtableFind(const Hashtable_t*, const void*);
 
-int hashtableDeleteNode(Hashtable_t*, const void*);
+int hashtableDeleteNode(Hashtable_t*, char*, void (*free_data)(void*));
 
-void hashtableFree(Hashtable_t*);
+void hashtableFree(Hashtable_t *hashtable, void (*free_data)(void*));
 
 void hashtablePrint(const Hashtable_t*);
 
