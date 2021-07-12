@@ -30,12 +30,12 @@
 #include "utils.h"
 #include "icl_hash.h"
 
-
 #define DEFAULT_WORKERS_THREAD 10
 #define DEFAULT_MAX_FILE 100
 #define DEFAULT_STORAGE_SIZE 512
 #define DEFAULT_SOCKET_NAME "./SOLsocket.sk"
 #define DEFAULT_NUM_BUCKETS 100
+#define MAX_OPEN 40
 
 /*================================== STRUTTURE UTILI ====================================================*/
 typedef struct queueNode{
@@ -47,7 +47,7 @@ typedef struct queueNode{
 typedef struct file{
     int fdcreator;
     long index;
-    queueNode_t* openby;
+    int openby[MAX_OPEN];
     pthread_mutex_t filemtx;
     char* contents;
     int size;
@@ -68,7 +68,7 @@ typedef struct statistics{
 }statistics_t;
 
 /*================================== VARIABILI GLOBALI ==================================================*/
-icl_hash_t* cache;
+Hashtable_t* cache;
 Info_t* info;
 serverstate_t* cache_state;
 statistics_t* statistics;
@@ -103,7 +103,7 @@ int findNode(queueNode_t** list, int data);
 void freeFile(void* f);
 void freeList(queueNode_t** list);
 void removeNodeByKey(queueNode_t** list, int data);
-char* getMinIndex(icl_hash_t* hashtable);
+char* getMinIndex(Hashtable_t* hashtable);
 static void gestore_term (int signum);
 void* workerFunction(void* args);   
 int opn(type_t req, int cfd, char pathname[]); 
@@ -149,7 +149,7 @@ int main(int argc, char* argv[]){
     
     //inizializzazioni strutture 
     info->storage_size = info->storage_size*1000000;
-    cache = icl_hash_create(info->num_buckets, hash_pjw, string_compare);
+    cache = hashtableInit(info->num_buckets, hashFunction, hashCompare);
     cache_state = initServerstate(info->storage_size);
     statistics = initStatistics();
 
@@ -253,13 +253,13 @@ int main(int argc, char* argv[]){
     printf("Max number of file saved: %d\n",statistics->max_saved_file);
     printf("Max size of Mbytes saved: %f\n",(statistics->max_bytes/pow(10,6)));
     printf("Number of swithes from the replace policy: %d\n",statistics->switches);
-    icl_hash_print(cache);
+    hashtablePrint(cache);
     printf("---------------------------------------------\n");
 
     if (close(listenfd)==-1) perror("close");
     remove(info->socket_name);
-    icl_hash_destroy(cache, free, freeFile);
-    freeList(&clientQueue);
+    hashtableFree(cache, freeFile);
+    free(clientQueue);
     free(workers);
     
     return 0;
@@ -300,7 +300,9 @@ file_t* createFile(int fd){
     file->index = count++;
     UNLOCK(&indexmtx);
     pthread_mutex_init(&file->filemtx, NULL);
-    insertNode(&file->openby, fd);
+    //inser(&file->openby, fd);
+    for(int i=0; i<MAX_OPEN; i++) file->openby[i] = 0;
+    file->openby[0] = fd;
     file->contents = NULL;
     file->size = 0;
     return file;
@@ -309,7 +311,7 @@ file_t* createFile(int fd){
 void freeFile(void* f){
     file_t* file = f;
     free(file->contents);
-    freeList(&file->openby);
+    //freeList(&file->openby);
     free(file);
 }
 
@@ -319,6 +321,25 @@ void printlist(queueNode_t* list){
         printf("%d\n", curr->data);
         curr = curr->next;
     }
+}
+
+void removevalue(int a[], int val){
+    int j = MAX_OPEN;
+    while(j == 0 && j > 0) j--;
+    for(int i=0; i<MAX_OPEN; i++){
+        if(a[i] == val){
+            a[i] = a[j];
+            a[j] = 0;
+            return;
+        }
+    }
+}
+
+int findvalue(int a[], int val){
+    for(int i=0; i<MAX_OPEN; i++){
+        if(a[i] == val) return 0;
+    }
+    return -1;
 }
 
 //funzione che monitora il valore massimo nel master set
@@ -432,11 +453,11 @@ void removeNodeByKey(queueNode_t** list, int data){
 }
 
 //funzione per gestire la politica fifo che cerca il minor indice nella hashtable
-char* getMinIndex(icl_hash_t* hashtable){
-    icl_entry_t *bucket, *curr;
+char* getMinIndex(Hashtable_t* hashtable){
+    Node_t *bucket, *curr;
     char* key = NULL;
     long min = LONG_MAX;
-    for(int i=0; i<hashtable->nbuckets; i++) {
+    for(int i=0; i<hashtable->numbuckets; i++) {
         bucket = hashtable->buckets[i];
         for(curr=bucket; curr!=NULL; curr=curr->next) {
             file_t* curr = bucket->data;
@@ -447,7 +468,7 @@ char* getMinIndex(icl_hash_t* hashtable){
             }
         }
     }
-    for(int i=0; i<hashtable->nbuckets; i++) {
+    for(int i=0; i<hashtable->numbuckets; i++) {
         bucket = hashtable->buckets[i];
         for(curr=bucket; curr!=NULL; curr=curr->next) {
             file_t* curr = bucket->data;
@@ -533,14 +554,14 @@ int opn(type_t req, int cfd, char pathname[]){
     char* key;
     if(req == OPENC){
         LOCK(&cachemtx);
-        if((tmp = icl_hash_find(cache, pathname)) != NULL){
+        if((tmp = hashtableFind(cache, pathname)) != NULL){
             UNLOCK(&cachemtx);
             //fprintf(stderr,"[SERVER] File still in the storage\n");
             answer = -3; //EEXIST
         }else{
             file_t* file = createFile(cfd);
             if(cache_state->num_file < info->max_file){
-                icl_hash_insert(cache, pathname, file);
+                hashtableInsert(cache, pathname, strlen(pathname)*sizeof(char), file, sizeof(file_t));
                 UNLOCK(&cachemtx);
 
                 LOCK(&cachestatemtx);
@@ -553,8 +574,8 @@ int opn(type_t req, int cfd, char pathname[]){
                 //politica di rimpiazzo
                 key = getMinIndex(cache);
                 printf("[SERVER]replacement policy on %s\n", key);
-                icl_hash_delete(cache, key, freeFile);
-                icl_hash_insert(cache, pathname, file);
+                hashtableDeleteNode(cache, key, freeFile);
+                hashtableInsert(cache, pathname, strlen(pathname)*sizeof(char), file, sizeof(file_t));
                 UNLOCK(&cachemtx);
 
                 LOCK(&statisticsmtx);
@@ -570,7 +591,7 @@ int opn(type_t req, int cfd, char pathname[]){
     }
     if(req == OPEN){
         LOCK(&cachemtx);
-        if((tmp = icl_hash_find(cache, pathname)) == NULL){
+        if((tmp = hashtableFind(cache, pathname)) == NULL){
             UNLOCK(&cachemtx);
             //fprintf(stderr, "[SERVER] File not present in the storage\n");
             answer = -1; //ENOENT
@@ -578,7 +599,10 @@ int opn(type_t req, int cfd, char pathname[]){
         else{
             LOCK(&tmp->filemtx);
             UNLOCK(&cachemtx);
-            insertNode(&tmp->openby, cfd);
+            //insertNode(&tmp->openby, cfd);
+            int i=0;
+            while(tmp->openby[i] != 0) i++;
+            tmp->openby[i] = cfd;
             UNLOCK(&tmp->filemtx);
         }
     }   
@@ -599,8 +623,8 @@ int wrt(int cfd, char pathname[]){
     CHECK_EQ_RETURN(readn(cfd, filebuffer, filesize+1), -1, "readn wrt", -1);
     file_t* tmp;
     LOCK(&cachemtx);
-    if((tmp = icl_hash_find(cache, pathname)) != NULL){
-        int flag = findNode(&tmp->openby, cfd);
+    if((tmp = hashtableFind(cache, pathname)) != NULL){
+        int flag = findvalue(tmp->openby, cfd);
         if(tmp->fdcreator == cfd && flag == 0){ //controllo che sia il creatore e abbia aperto il file
             if(filesize > info->storage_size){
                 UNLOCK(&cachemtx);
@@ -611,13 +635,13 @@ int wrt(int cfd, char pathname[]){
                 LOCK(&cachestatemtx);
                 while(cache_state->free_space < filesize){
                     char* key = getMinIndex(cache);
-                    file_t* tmp1 = icl_hash_find(cache, (void*) key);
+                    file_t* tmp1 = hashtableFind(cache, (void*) key);
                     int size = tmp1->size;
                     printf("[SERVER]replacement policy on %s\n",(char*)key);
                     LOCK(&statisticsmtx);
                     statistics->switches++;
                     UNLOCK(&statisticsmtx);
-                    icl_hash_delete(cache, key, freeFile);
+                    hashtableDeleteNode(cache, key, freeFile);
                     cache_state->free_space += size;
                     cache_state->used_space -= size;
                     cache_state->num_file--;
@@ -643,6 +667,7 @@ int wrt(int cfd, char pathname[]){
         //fprintf(stderr, "[SERVER] File not found in the storage\n");
         answer = -1; //ENOENT
     }
+    free(filebuffer);
     CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen wrt", -1);
     return answer;
 }
@@ -651,19 +676,19 @@ int cls(int cfd, char pathname[]){
     int answer = 0;
     file_t* tmp;
     LOCK(&cachemtx);
-    if((tmp = icl_hash_find(cache, pathname)) == NULL){
+    if((tmp = hashtableFind(cache, pathname)) == NULL){
         UNLOCK(&cachemtx);
         //fprintf(stderr,"[SERVER] File not present\n");
         answer = -1; //ENOENT
     }else{
         LOCK(&tmp->filemtx);
         UNLOCK(&cachemtx);
-        if(findNode(&tmp->openby, cfd) == -1){
+        if(findvalue(tmp->openby, cfd) == -1){
             UNLOCK(&tmp->filemtx);
             //fprintf(stderr, "[SERVER] The client %d doesnt't have the file open\n", cfd);
             answer = -2; //EPERM
         }else{
-            removeNodeByKey(&tmp->openby, cfd);
+            removevalue(tmp->openby, cfd);
             UNLOCK(&tmp->filemtx);
         }
     }
@@ -676,10 +701,10 @@ int rd(int cfd, char pathname[]){
     int answer = 0;
     int size = -1;
     LOCK(&cachemtx);
-    if((tmp = icl_hash_find(cache, pathname) )!= NULL){
+    if((tmp = hashtableFind(cache, pathname) )!= NULL){
         LOCK(&tmp->filemtx);
         UNLOCK(&cachemtx);
-        if(findNode(&tmp->openby, cfd) == 0){
+        if(findvalue(tmp->openby, cfd) == 0){
             size = tmp->size;
             UNLOCK(&tmp->filemtx);
         }
@@ -703,14 +728,14 @@ int rm(int cfd, char pathname[]){
     int answer = 0;
     file_t* tmp;
     LOCK(&cachemtx);
-    if((tmp = icl_hash_find(cache, pathname)) == NULL){
+    if((tmp = hashtableFind(cache, pathname)) == NULL){
         UNLOCK(&cachemtx);
         //fprintf(stderr,"[SERVER] File not found in the storage\n");
         answer = -1; //ENOENT
     }else{
         int filesize = tmp->size;
         
-        icl_hash_delete(cache, pathname, freeFile);
+        hashtableDeleteNode(cache, pathname, freeFile);
         UNLOCK(&cachemtx);
 
         LOCK(&cachestatemtx);
@@ -729,10 +754,10 @@ int rdn(int cfd, char info[]){
     UNLOCK(&cachestatemtx);
 
     CHECK_EQ_EXIT(writen(cfd, &n, sizeof(int)), -1, "writen rdn");
-    icl_entry_t *bucket, *curr;
+    Node_t *bucket, *curr;
     int i = 0;
     LOCK(&cachemtx);
-    while(i<cache->nbuckets && n > 0){
+    while(i<cache->numbuckets && n > 0){
         bucket = cache->buckets[i];
         for(curr=bucket; curr!=NULL; curr=curr->next){
             int len = strlen(bucket->key)+1;
