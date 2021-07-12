@@ -5,17 +5,18 @@ La capacità del file storage, unitamente ad altri parametri di configurazione, 
 Il file storage server è implementato come un singolo processo multi-threaded in grado di accettare connessioni da multipli client. Il processo server dovrà essere in grado di gestire adeguatamente alcune decine di connessioni contemporanee da parte di più client.
 Ogni client mantiene una sola connessione verso il server sulla quale invia una o più richieste relative ai file memorizzati nel server, ed ottiene le risposte in accordo al protocollo di comunicazione “richiesta-risposta”. Un file è identificato univocamente dal suo path assoluto.
 
-#Comandi da eseguire nella directory principale :
+# Comandi da eseguire nella directory principale :
+
 make : costruisce gli eseguibili "server" e "client"
 make test1 : avvia il primo test
 make test2 : avvia il secondo test
 make clean : elimina gli eseguibili "server" e "client"
 make cleanall : elimina tutti i file generati da make (eseguibili, oggetto, temporanei, librerie, ...)
 
-#Comandi server :
+# Comandi server :
 -f config.txt : specifica il file di config da usare
 
-#Comandi client :
+# Comandi client :
 -h : lista operazioni client
 -f filename : connettiti al socket filename
 -w dirname[,n=0] : scrivi sul server n file contenuti nella directory dirname, se n=0 o non specificato scrivili tutti
@@ -27,7 +28,7 @@ make cleanall : elimina tutti i file generati da make (eseguibili, oggetto, temp
 -c file1[,file2] : elimina i file dal server
 -p : abilita stampe su stdout per ogni operazione
 
-#Struttura directory :
+# Struttura directory :
 configtest1 : contiene config.tx per il test 1
 configtest2 : contiene config.txt per il test 2
 test : cartella con file utilizzati per i test (con sottocartella)
