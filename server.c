@@ -149,19 +149,19 @@ int main(int argc, char* argv[]){
 
     /*caso in cui il valori passati non sono corretti o incompleti*/
     if((argc == 3 && strcmp(argv[1], "-f")) || argc == 2){
-        printf("use: %s [-f pathconfigurationfile]\n", argv[0]);
+        printf("[SERVER] use: %s [-f pathconfigurationfile]\n", argv[0]);
         return EXIT_FAILURE;
     }
 
     /*caso in cui il file di congifigurazione non è passato*/
     if(argc == 1){
-        printf("server default configuration (configuration file is not passed)\n");
+        printf("[SERVER] default configuration (configuration file is not passed)\n");
         setDefault(info);
     }
     else{ /*caso corretto*/
         if(parsConfiguration(argv[2], info) == -1){
             /*se qualcosa va storto nel parsing setto valori di default*/
-            fprintf(stderr, "ERROR: configuration file is not parsed correctly, server will be setted with default values\n");
+            fprintf(stderr, "[SERVER] ERROR: configuration file is not parsed correctly, server will be setted with default values\n");
             setDefault(info);
         }    
     }
@@ -204,7 +204,7 @@ int main(int argc, char* argv[]){
     if(pipefd[0] > max_fd) max_fd = pipefd[0];
     FD_SET(pipefd[0], &set);
 
-	fprintf(stdout, "SERVER: listening...\n");
+	fprintf(stdout, "[SERVER] listening...\n");
     while(1){
         tmpset = set;
         if(select(max_fd+1, &tmpset, NULL, NULL, NULL) == -1){
@@ -212,7 +212,7 @@ int main(int argc, char* argv[]){
             else if (term==2) { 
                 if (clients==0) break;
                 else {
-                    printf("Chiusura Soft...\n");
+                    printf("[SERVER] Chiusura Soft...\n");
                     FD_CLR(listenfd, &set);
                     if (listenfd == max_fd) max_fd = updatemax(set,max_fd);
                     tmpset = set;
@@ -231,7 +231,7 @@ int main(int argc, char* argv[]){
         for(int i=0; i<=max_fd; i++){
             if(FD_ISSET(i, &tmpset)){ 
                 if(i == listenfd){ //nuova richiesta di connessione
-                    //printf("new request from new client\n");
+                    //printf("[SERVER] New request from new client\n");
                     if((cfd = accept(listenfd, (struct sockaddr*)NULL, NULL)) == -1){
                         if(term == 1) break;
                         else if(term == 2){
@@ -241,7 +241,7 @@ int main(int argc, char* argv[]){
                     FD_SET(cfd, &set); //aggiungo descrittore al master set
                     if(cfd > max_fd) max_fd = cfd;
                     clients++;
-                    printf("\nNew connection accepted: client %d\n", cfd);
+                    printf("\n[SERVER] New connection accepted: client %d\n", cfd);
 
                 }else if(i == pipefd[0]){ //è una scrittura sulla pipe
                     int fdfrompipe;
@@ -259,7 +259,6 @@ int main(int argc, char* argv[]){
                 }
             }
         }
-        //printf("%d\n", term);
     }
     
     if(term == 2){
@@ -268,12 +267,12 @@ int main(int argc, char* argv[]){
         }
     }
 
-    printf("\n---------STATISTICS SERVER----------\n");
+    printf("\n-------------STATISTICS SERVER--------------\n");
     printf("Max number of file saved: %d\n",statistics->max_saved_file);
     printf("Max size of Mbytes saved: %f\n",(statistics->max_bytes/pow(10,6)));
     printf("Number of swithes from the replace policy: %d\n",statistics->switches);
     hashtablePrint(cache);
-    printf("-------------------------------------\n");
+    printf("---------------------------------------------\n");
 
     if (close(listenfd)==-1) perror("close");
     remove(info->socket_name);
@@ -486,7 +485,7 @@ void* workerFunction(void* args){
         if(readn(cfd, &request, sizeof(request_t)) == -1){
             request.req = -1;
         }
-        //printf("REQUEST %d from client %d: ", request.req, cfd);
+        //printf("[SERVER] REQUEST %d from client %d: ", request.req, cfd);
         switch (request.req){
             case OPEN:
                 //printf("APERTURA FILE %s\n", request.info);
@@ -525,15 +524,13 @@ void* workerFunction(void* args){
                 answer = rdn(cfd, request.info);
                 break;
             default:
-                fprintf(stderr, "Invalid request\n");
+                fprintf(stderr, "[SERVER] Invalid request\n");
                 break;
         }
-        //if(answer != 0) fprintf(stderr, "impossible to satisfy the request %d\n", request.req);
+        //if(answer != 0) fprintf(stderr, "[SERVER] Impossible to satisfy the request %d\n", request.req);
         if(request.req != CLOSECONN){
             writen(pipefd[1], &cfd, sizeof(int));
         }
-        //hashtablePrint(cache);
-        //printf("\n");
     }
     return 0;
 }
@@ -545,8 +542,8 @@ int opn(type_t req, int cfd, char pathname[]){
     if(req == OPENC){
         LOCK(&cachemtx);
         if((tmp = hashtableFind(cache, pathname)) != NULL){
-            UNLOCK(&cachemtx)
-            //fprintf(stderr,"File still in the storage\n");
+            UNLOCK(&cachemtx);
+            //fprintf(stderr,"[SERVER] File still in the storage\n");
             answer = -3; //EEXIST
         }else{
             file_t* file = createFile(cfd);
@@ -563,7 +560,7 @@ int opn(type_t req, int cfd, char pathname[]){
             }else{
                 //politica di rimpiazzo
                 key = getMinIndex(cache);
-                printf("replacement policy on %s\n", key);
+                printf("[SERVER]replacement policy on %s\n", key);
                 hashtableDeleteNode(cache, (void*)key);
                 hashtableInsert(cache, pathname, strlen(pathname)*sizeof(char), file, sizeof(file_t));
                 UNLOCK(&cachemtx);
@@ -583,7 +580,7 @@ int opn(type_t req, int cfd, char pathname[]){
         LOCK(&cachemtx);
         if((tmp = hashtableFind(cache, pathname)) == NULL){
             UNLOCK(&cachemtx);
-            //fprintf(stderr, "File not present in the storage\n");
+            //fprintf(stderr, "[SERVER] File not present in the storage\n");
             answer = -1; //ENOENT
         }
         else{
@@ -615,7 +612,7 @@ int wrt(int cfd, char pathname[]){
         if(tmp->fdcreator == cfd && flag == 0){ //controllo che sia il creatore e abbia aperto il file
             if(filesize > info->storage_size){
                 UNLOCK(&cachemtx);
-                //fprintf(stderr, "File too large for the size of storage\n");
+                //fprintf(stderr, "[SERVER] File too large for the size of storage\n");
                 answer = -4;
             }
             else{
@@ -624,7 +621,7 @@ int wrt(int cfd, char pathname[]){
                     char* key = getMinIndex(cache);
                     file_t* tmp1 = hashtableFind(cache, (void*) key);
                     int size = tmp1->size;
-                    printf("replacement policy on %s\n",(char*)key);
+                    printf("[SERVER]replacement policy on %s\n",(char*)key);
                     LOCK(&statisticsmtx);
                     statistics->switches++;
                     UNLOCK(&statisticsmtx);
@@ -646,12 +643,12 @@ int wrt(int cfd, char pathname[]){
             }
         }else{
             UNLOCK(&cachemtx);
-            //fprintf(stderr, "Operation not authorized for client %d\n", cfd);
+            //fprintf(stderr, "[SERVER] Operation not authorized for client %d\n", cfd);
             answer = -2; //EPERM
         }
     }else{
         UNLOCK(&cachemtx);
-        //fprintf(stderr, "File not found in the storage\n");
+        //fprintf(stderr, "[SERVER] File not found in the storage\n");
         answer = -1; //ENOENT
     }
     CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen wrt", -1);
@@ -664,14 +661,14 @@ int cls(int cfd, char pathname[]){
     LOCK(&cachemtx);
     if((tmp = hashtableFind(cache, pathname)) == NULL){
         UNLOCK(&cachemtx);
-        //fprintf(stderr,"File not present\n");
+        //fprintf(stderr,"[SERVER] File not present\n");
         answer = -1; //ENOENT
     }else{
         LOCK(&tmp->filemtx);
         UNLOCK(&cachemtx);
         if(findNode(&tmp->openby, cfd) == -1){
             UNLOCK(&tmp->filemtx);
-            //fprintf(stderr, "The client %d doesnt't have the file open\n", cfd);
+            //fprintf(stderr, "[SERVER] The client %d doesnt't have the file open\n", cfd);
             answer = -2; //EPERM
         }else{
             removeNodeByKey(&tmp->openby, cfd);
@@ -716,7 +713,7 @@ int rm(int cfd, char pathname[]){
     LOCK(&cachemtx);
     if((tmp = hashtableFind(cache, pathname)) == NULL){
         UNLOCK(&cachemtx);
-        //fprintf(stderr,"File not found in the storage\n");
+        //fprintf(stderr,"[SERVER] File not found in the storage\n");
         answer = -1; //ENOENT
     }else{
         int filesize = tmp->size;

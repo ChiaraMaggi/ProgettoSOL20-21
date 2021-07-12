@@ -47,7 +47,6 @@ Node_t* createNode(const void* key, size_t keysize, const void* data, size_t dat
 	return node;
 }
 
-
 void printNode(const Node_t* node){
 	if (node == NULL) fprintf(stdout, "NULL\n");
 	else{
