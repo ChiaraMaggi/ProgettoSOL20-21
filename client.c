@@ -45,6 +45,7 @@ int main(int argc, char* argv[]){
         printf("One command is necessary: use -h for see the options\n");
         return 0;
     }
+    //flag per fare controlli sui vari comandi
     int flag_h=0, flag_p=0, flag_d=0, flag_r=0, flag_R=0, flag_f=0, flag_t=0;
     char* dir_r = NULL;
 
@@ -161,6 +162,7 @@ int main(int argc, char* argv[]){
     return 0;
 }
 
+//funzione per gestire il comando -f
 int arg_f(char* s_name){
     strcpy(socketname, s_name);
     struct timespec abstime;
@@ -170,6 +172,7 @@ int arg_f(char* s_name){
     return 0;
 }
 
+//funzione per controllare e parsare il comando -w
 int parse_w(char* optarg, char* dirname, long* fileToSend){
     if(optarg[0] == ','){
         fprintf(stderr, "directory name can't be omitted\n");
@@ -199,6 +202,7 @@ int parse_w(char* optarg, char* dirname, long* fileToSend){
     return 0;
 }
 
+//funzione per gestire il comando -w
 int arg_w(char* dirname, long* fileToSend){
     //controllo se dirname è effettivamente una directory
     struct stat statbuf;
@@ -254,6 +258,7 @@ int arg_w(char* dirname, long* fileToSend){
     return 0;
 }
 
+//funzione per gestire il comando -W
 int arg_W(char* optarg){
     char* tmpstr;
     char* token = strtok_r(optarg, ",", &tmpstr);
@@ -290,6 +295,7 @@ int arg_W(char* optarg){
     return 0;
 }
 
+//funzione per gestire il comando -r
 int arg_r(char* optarg, char* dir){
     char* tmpstr;
     char* token = strtok_r(optarg, ",", &tmpstr);
@@ -343,6 +349,7 @@ int arg_r(char* optarg, char* dir){
     return 0;
 }
 
+//funzione per gestire il comando -c
 int arg_c(char* optarg){
     char* tmpstr;
     char* token = strtok_r(optarg, ",", &tmpstr);
@@ -368,6 +375,7 @@ int arg_c(char* optarg){
     return 0;
 }
 
+//funzione per gestire il comando -R
 int arg_R(char* optarg, char* dir){
     long n;
     if(isNumber(optarg, &n) != 0){
