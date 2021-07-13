@@ -300,7 +300,6 @@ file_t* createFile(int fd){
     file->index = count++;
     UNLOCK(&indexmtx);
     pthread_mutex_init(&file->filemtx, NULL);
-    //inser(&file->openby, fd);
     for(int i=0; i<MAX_OPEN; i++) file->openby[i] = 0;
     file->openby[0] = fd;
     file->contents = NULL;
@@ -311,7 +310,6 @@ file_t* createFile(int fd){
 void freeFile(void* f){
     file_t* file = f;
     free(file->contents);
-    //freeList(&file->openby);
     free(file);
 }
 
@@ -551,7 +549,6 @@ void* workerFunction(void* args){
 int opn(type_t req, int cfd, char pathname[]){
     int answer = 0;
     file_t* tmp;
-    char* key;
     if(req == OPENC){
         LOCK(&cachemtx);
         if((tmp = hashtableFind(cache, pathname)) != NULL){
@@ -572,6 +569,7 @@ int opn(type_t req, int cfd, char pathname[]){
                 UNLOCK(&statisticsmtx);
             }else{
                 //politica di rimpiazzo
+                char* key;
                 key = getMinIndex(cache);
                 printf("[SERVER]replacement policy on %s\n", key);
                 hashtableDeleteNode(cache, key, freeFile);
@@ -599,7 +597,6 @@ int opn(type_t req, int cfd, char pathname[]){
         else{
             LOCK(&tmp->filemtx);
             UNLOCK(&cachemtx);
-            //insertNode(&tmp->openby, cfd);
             int i=0;
             while(tmp->openby[i] != 0) i++;
             tmp->openby[i] = cfd;
