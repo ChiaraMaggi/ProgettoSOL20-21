@@ -71,6 +71,6 @@ test1: $(TARGET)
 	@printf "\ntest1 terminato\n"
 
 test2: $(TARGET)
-	./server -f configfile/configtest2.txt & bash ./script/test2.sh & kill -1 $$!
+	./server -f configfile/configtest2.txt & bash ./script/test2.sh; kill -1 $$!
 	@sleep 1
 	@printf "\ntest2 terminato\n"
