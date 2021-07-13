@@ -30,7 +30,7 @@ int hashCompare(const void* a, const void* b){
 }
 
 
-Node_t* createNode(const void* key, size_t keysize, const void* data, size_t datasize){
+Node_t* createNode(const void* key, size_t keysize, void* data, size_t datasize){
 	Node_t* node;
 	node = (Node_t*)malloc(sizeof(Node_t));
 	node->key = calloc(keysize + 1, sizeof(char));
@@ -62,7 +62,7 @@ Hashtable_t* hashtableInit(size_t numbuckets, unsigned int (*hash_function) (con
 }
 
 
-int hashtableInsert(Hashtable_t* hashtable, const void* key, size_t keysize, const void* data, size_t datasize){
+int hashtableInsert(Hashtable_t* hashtable, const void* key, size_t keysize, void* data, size_t datasize){
 	if (key == NULL || keysize == 0) return -1;
 	size_t hash = hashtable->hashFunction(key) % hashtable->numbuckets;
 	for (Node_t* curr = hashtable->buckets[hash]; curr != NULL; curr = curr->next){

@@ -24,13 +24,13 @@ unsigned int hashFunction(const void*);
 
 int hashCompare(const void*, const void*);
 
-Node_t* createNode(const void*, size_t, const void*, size_t);
+Node_t* createNode(const void*, size_t, void*, size_t);
 
 void printNode(const Node_t*);
 
 Hashtable_t* hashtableInit(size_t, unsigned int (*hash_function) (const void*), int (*hash_compare) (const void*, const void*));
 
-int hashtableInsert(Hashtable_t*, const void*, size_t, const void*, size_t);
+int hashtableInsert(Hashtable_t*, const void*, size_t, void*, size_t);
 
 void* hashtableGetEntry(const Hashtable_t*, const void*);
 
