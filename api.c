@@ -17,7 +17,7 @@
 #include<stdarg.h>
 #include<fcntl.h>
 #include <sys/stat.h>
-#include<limits.h>
+#include<linux/limits.h>
 #include<libgen.h>
 
 #include "utils.h"
@@ -321,12 +321,17 @@ int appendToFile(const char* pathname, void* buf, size_t size, const char* dirna
     strcpy(request.info, pathname);
     CHECK_EQ_RETURN((writen(fd_socket, &request, sizeof(request_t))), -1, "writen appendToFile", -1);
 
-    CHECK_EQ_RETURN((writen(fd_socket, &size, sizeof(size_t))), -1, "writen appendFile", -1);    
-    CHECK_EQ_RETURN((writen(fd_socket, buf, sizeof(buf))), -1, "writen appenadFile", -1);
+    CHECK_EQ_RETURN((writen(fd_socket, &size, sizeof(size_t))), -1, "writen appendFile", -1);  
+
+    CHECK_EQ_RETURN((writen(fd_socket, buf, (size+1)*sizeof(void*))), -1, "writen appenadFile", -1);
     int answer = -1;
     CHECK_EQ_RETURN((readn(fd_socket, &answer, sizeof(int))), -1, "readn readFile", -1);  
     if(answer == -1){
-        errno = ECANCELED;
+        errno = ENOENT;
+        return -1;
+    }
+    if(answer == -4){
+        errno = EFBIG;
         return -1;
     }
     return 0;

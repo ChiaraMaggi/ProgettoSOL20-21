@@ -113,6 +113,7 @@ int cls(int cfd, char pathname[]);
 int rd(int cfd, char pathname[]);
 int rm(int cfd, char pathname[]);
 int rdn(int cfd, char info[]);
+int app(int cfd, char pathname[]);
 
 /*===================================================== MAIN ==========================================*/
 int main(int argc, char* argv[]){
@@ -510,6 +511,7 @@ void* workerFunction(void* args){
                 answer = wrt(cfd, request.info);
                 break;
             case APPEND:
+                answer = app(cfd, request.info);
                 break;
             case READ:
                 //printf("LETTURA FILE %s\n", request.info);
@@ -787,4 +789,79 @@ int rdn(int cfd, char info[]){
     }
     UNLOCK(&cachemtx);
     return 0;
+}
+
+//funzione chiamata quando è richiesta un append
+int app(int cfd, char pathname[]){
+    int answer = 0;
+    file_t* tmp;
+    size_t size;
+    printf("%s\n", pathname);
+    CHECK_EQ_RETURN(readn(cfd, &size, sizeof(size_t)), -1, "readn app", -1);
+
+    char* buf = malloc((size+1)*sizeof(char));
+    CHECK_EQ_RETURN(readn(cfd, buf, (size+1)*sizeof(char)), -1, "readn app", -1);
+
+    LOCK(&cachemtx);
+    if((tmp = hashtableFind(cache, pathname)) == NULL){
+        UNLOCK(&cachemtx);
+        //fprintf(stderr,"[SERVER] File not found in the storage\n");
+        answer = -1; //ENOENT
+    }else{
+        if(info->storage_size < size){
+            UNLOCK(&cachemtx);
+            //fprintf(stderr, "[SERVER] File too large for the size of storage\n");
+            answer = -4;
+        }else{
+            LOCK(&cachestatemtx);
+            while(cache_state->free_space < size){
+                char key[PATH_MAX];
+                getMinIndex(cache, key);
+                file_t* tmp1 = hashtableFind(cache, key);
+                int size2 = tmp1->size;
+                printf("[SERVER]replacement policy on %s\n",key);
+                LOCK(&statisticsmtx);
+                statistics->switches++;
+                UNLOCK(&statisticsmtx);
+                hashtableDeleteNode(cache, key, freeFile);
+                cache_state->free_space += size2;
+                cache_state->used_space -= size2;
+                cache_state->num_file--;   
+            }
+            UNLOCK(&cachestatemtx);
+            if((tmp = hashtableFind(cache, pathname)) != NULL){ //file ancora nella cache
+                LOCK(&tmp->filemtx);
+                UNLOCK(&cachemtx);
+
+                int newsize = tmp->size+size;
+                char* newcontent = malloc((newsize+1)*sizeof(char));
+                memcpy(newcontent, tmp->contents, tmp->size);
+                memcpy(newcontent + tmp->size, buf, size);
+
+                free(tmp->contents);
+                tmp->contents = newcontent;
+                tmp->size = newsize;
+
+                free(newcontent);
+
+                UNLOCK(&tmp->filemtx);
+                
+                LOCK(&cachestatemtx);
+                cache_state->free_space -= size;
+                cache_state->used_space += size;
+                LOCK(&statisticsmtx);
+                if(statistics->max_bytes < cache_state->used_space) statistics->max_bytes = cache_state->used_space;
+                UNLOCK(&cachestatemtx);
+                UNLOCK(&statisticsmtx);
+                
+            }else{
+                UNLOCK(&cachemtx);
+                //fprintf(stderr, "[SERVER] File remmoved by replacement policy\n");
+                answer = -1; //ENOENT
+            }
+
+        }
+    }
+    CHECK_EQ_RETURN(writen(cfd, &answer, sizeof(int)), -1, "writen app", -1);
+    return answer;
 }
