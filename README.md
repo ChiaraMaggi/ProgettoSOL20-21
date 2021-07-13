@@ -51,9 +51,7 @@ make cleanall : elimina tutti i file generati da make (eseguibili, oggetto, temp
 
 ->Struttura directory :
 
-configtest1 : contiene config.tx per il test 1
-
-configtest2 : contiene config.txt per il test 2
+configfile : contiene configtest1.txt e configtest2.txt per i due test
 
 test : cartella con file utilizzati per i test (con sottocartella)
 
