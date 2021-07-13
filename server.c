@@ -25,6 +25,7 @@
 #include<time.h>
 #include<libgen.h>
 #include<math.h>
+#include<linux/limits.h>
 
 #include "parsing.h"
 #include "utils.h"
@@ -46,7 +47,7 @@ typedef struct queueNode{
 //campo "data" nella struttura del nodo della hashtable
 typedef struct file{
     int fdcreator;
-    long index;
+    long index; //indice per gestione politica di rimpiazzo
     int openby[MAX_OPEN];
     pthread_mutex_t filemtx;
     char* contents;
@@ -68,18 +69,16 @@ typedef struct statistics{
 }statistics_t;
 
 /*================================== VARIABILI GLOBALI ==================================================*/
-Hashtable_t* cache;
 Info_t* info;
-serverstate_t* cache_state;
-statistics_t* statistics;
-int listenfd;
-queueNode_t* clientQueue;
+Hashtable_t* cache;
 pthread_t* workers;
+queueNode_t* clientQueue;
+statistics_t* statistics;
+serverstate_t* cache_state;
 static int pipefd[2];
-int active_threads = 0;
-int clients = 0;
-long count = 0;
-int max_fd = 0;
+int clients = 0; //numero di client attivi
+long count = 0; //contatore per gestire la poltica di rimpiazzo
+int max_fd = 0; //massimo fd
 fd_set set;
 fd_set tmpset;
 volatile sig_atomic_t term = 0; //FLAG SETTATO DAL GESTORE DEI SEGNALI DI TERMINAZIONE
@@ -92,28 +91,28 @@ pthread_mutex_t statisticsmtx = PTHREAD_MUTEX_INITIALIZER;
 
 
 /*=================================== FUNZIONI UTILI ====================================================*/
-void setDefault(Info_t* info);
 serverstate_t* initServerstate(int size);
 statistics_t* initStatistics();
 file_t* createFile(int fd);
-int updatemax(fd_set set, int fdmax); 
+void setDefault(Info_t* info);
 void insertNode (queueNode_t** list, int data);  
-int removeNode (queueNode_t** list);
-int findNode(queueNode_t** list, int data);
 void freeFile(void* f);
 void freeList(queueNode_t** list);
 void removeNodeByKey(queueNode_t** list, int data);
-char* getMinIndex(Hashtable_t* hashtable);
+void getMinIndex(Hashtable_t* hashtable, char* key);
+void removevalue(int a[], int val);
 static void gestore_term (int signum);
+int findvalue(int a[], int val);
+int updatemax(fd_set set, int fdmax); 
+int removeNode (queueNode_t** list);
+int findNode(queueNode_t** list, int data);
 void* workerFunction(void* args);   
 int opn(type_t req, int cfd, char pathname[]); 
 int wrt(int cfd, char pathname[]);
-int rd(int cfd, char pathname[]);
 int cls(int cfd, char pathname[]);
+int rd(int cfd, char pathname[]);
 int rm(int cfd, char pathname[]);
 int rdn(int cfd, char info[]);
-void printlist(queueNode_t* list);
-
 
 /*===================================================== MAIN ==========================================*/
 int main(int argc, char* argv[]){
@@ -259,19 +258,10 @@ int main(int argc, char* argv[]){
     if (close(listenfd)==-1) perror("close");
     remove(info->socket_name);
     hashtableFree(cache, freeFile);
-    free(clientQueue);
+    freeList(&clientQueue);
     free(workers);
     
     return 0;
-}
-
-//funzione che setta valori di default se il file di configurazione non è passato
-void setDefault(Info_t* info){
-    info->workers_thread = DEFAULT_WORKERS_THREAD;
-    info->max_file = DEFAULT_MAX_FILE;
-    info->storage_size = DEFAULT_STORAGE_SIZE;
-    strcpy(info->socket_name, DEFAULT_SOCKET_NAME);
-    info->num_buckets = DEFAULT_NUM_BUCKETS;
 }
 
 //funzione che inizializza lo stato del server
@@ -307,45 +297,13 @@ file_t* createFile(int fd){
     return file;
 }
 
-void freeFile(void* f){
-    file_t* file = f;
-    free(file->contents);
-    free(file);
-}
-
-void printlist(queueNode_t* list){
-    queueNode_t* curr = list;
-    while(curr != NULL){
-        printf("%d\n", curr->data);
-        curr = curr->next;
-    }
-}
-
-void removevalue(int a[], int val){
-    int j = MAX_OPEN;
-    while(j == 0 && j > 0) j--;
-    for(int i=0; i<MAX_OPEN; i++){
-        if(a[i] == val){
-            a[i] = a[j];
-            a[j] = 0;
-            return;
-        }
-    }
-}
-
-int findvalue(int a[], int val){
-    for(int i=0; i<MAX_OPEN; i++){
-        if(a[i] == val) return 0;
-    }
-    return -1;
-}
-
-//funzione che monitora il valore massimo nel master set
-int updatemax(fd_set set, int fdmax) {
-    for(int i=(fdmax-1);i>=0;--i)
-	if (FD_ISSET(i, &set)) return i;
-    assert(1==0);
-    return -1;
+//funzione che setta valori di default se il file di configurazione non è passato
+void setDefault(Info_t* info){
+    info->workers_thread = DEFAULT_WORKERS_THREAD;
+    info->max_file = DEFAULT_MAX_FILE;
+    info->storage_size = DEFAULT_STORAGE_SIZE;
+    strcpy(info->socket_name, DEFAULT_SOCKET_NAME);
+    info->num_buckets = DEFAULT_NUM_BUCKETS;
 }
 
 //push di un nodo del tipo queueNode_t in una lista
@@ -368,6 +326,111 @@ void insertNode (queueNode_t** list, int data) {
     //RILASCIO LOCK
     UNLOCK(&queueclientmtx);
     
+}
+
+//libera memoria occupata da un file
+void freeFile(void* f){
+    file_t* file = f;
+    free(file->contents);
+    free(file);
+}
+
+//libera memoria occupata da una queuelist
+void freeList(queueNode_t** head) {
+    if(*head == NULL) return;
+    queueNode_t* tmp;
+    queueNode_t * curr = *head;
+    while (curr != NULL) {
+        tmp = curr;
+        curr = curr->next;
+        free(tmp);
+    }
+    free(curr);
+}
+
+//rimuove un nodo del tipo queueNode_t  con un certo valore da una lista
+void removeNodeByKey(queueNode_t** list, int data){
+    //PRENDO LOCK
+    LOCK(&queueclientmtx);
+
+    queueNode_t* curr = *list;
+    queueNode_t* prev = NULL;
+    while (curr != NULL) {
+        if(curr->data == data){
+            if(prev == NULL){
+                *list = curr->next;
+            }else prev->next = curr->next;
+            free(curr);
+            UNLOCK(&queueclientmtx);
+            return;
+        }
+        prev = curr;
+        curr = curr->next;
+    }
+    //RILASCIO LOCK
+    UNLOCK(&queueclientmtx);
+}
+
+//funzione per gestire la politica fifo che cerca il minor indice nella hashtable
+void getMinIndex(Hashtable_t* hashtable, char* key){
+    Node_t *bucket, *curr;
+    long min = LONG_MAX;
+    for(int i=0; i<hashtable->numbuckets; i++) {
+        bucket = hashtable->buckets[i];
+        for(curr=bucket; curr!=NULL; curr=curr->next) {
+            file_t* curr = bucket->data;
+            if(curr->index < min){
+                min = curr->index;
+                strcpy(key, (char*)bucket->key);
+            }
+        }
+    }
+    for(int i=0; i<hashtable->numbuckets; i++) {
+        bucket = hashtable->buckets[i];
+        for(curr=bucket; curr!=NULL; curr=curr->next) {
+            file_t* curr = bucket->data;
+            curr->index--;
+        }
+    }
+}
+
+//rimuove un certo valore da un array
+void removevalue(int a[], int val){
+    int j = MAX_OPEN;
+    while(j == 0 && j > 0) j--;
+    for(int i=0; i<MAX_OPEN; i++){
+        if(a[i] == val){
+            a[i] = a[j];
+            a[j] = 0;
+            return;
+        }
+    }
+}
+
+//gestore della terminazione
+static void gestore_term (int signum) {
+    if (signum==SIGINT || signum==SIGQUIT) {
+        term = 1;
+    } else if (signum==SIGHUP) {
+        //gestisci terminazione soft 
+        term = 2;
+    } 
+}
+
+//trova un certo valore in un array
+int findvalue(int a[], int val){
+    for(int i=0; i<MAX_OPEN; i++){
+        if(a[i] == val) return 0;
+    }
+    return -1;
+}
+
+//funzione che monitora il valore massimo nel master set
+int updatemax(fd_set set, int fdmax) {
+    for(int i=(fdmax-1);i>=0;--i)
+	if (FD_ISSET(i, &set)) return i;
+    assert(1==0);
+    return -1;
 }
 
 //pop di nodo del tipo queueNode_t da una lista
@@ -415,77 +478,7 @@ int findNode (queueNode_t** list, int data){
     return -1;
 }
 
-void freeList(queueNode_t** head) {
-    if(*head == NULL) return;
-    queueNode_t* tmp;
-    queueNode_t * curr = *head;
-    while (curr != NULL) {
-        tmp = curr;
-        curr = curr->next;
-        free(tmp);
-    }
-    free(curr);
-}
-
-//rimuove un nodo del tipo queueNode_t  con un certo valore da una lista
-void removeNodeByKey(queueNode_t** list, int data){
-    //PRENDO LOCK
-    LOCK(&queueclientmtx);
-
-    queueNode_t* curr = *list;
-    queueNode_t* prev = NULL;
-    while (curr != NULL) {
-        if(curr->data == data){
-            if(prev == NULL){
-                *list = curr->next;
-            }else prev->next = curr->next;
-            free(curr);
-            UNLOCK(&queueclientmtx);
-            return;
-        }
-        prev = curr;
-        curr = curr->next;
-    }
-    //RILASCIO LOCK
-    UNLOCK(&queueclientmtx);
-}
-
-//funzione per gestire la politica fifo che cerca il minor indice nella hashtable
-char* getMinIndex(Hashtable_t* hashtable){
-    Node_t *bucket, *curr;
-    char* key = NULL;
-    long min = LONG_MAX;
-    for(int i=0; i<hashtable->numbuckets; i++) {
-        bucket = hashtable->buckets[i];
-        for(curr=bucket; curr!=NULL; curr=curr->next) {
-            file_t* curr = bucket->data;
-            if(curr->index < min){
-                min = curr->index;
-                key = malloc(strlen(bucket->key)*sizeof(char));
-                strcpy(key, bucket->key);
-            }
-        }
-    }
-    for(int i=0; i<hashtable->numbuckets; i++) {
-        bucket = hashtable->buckets[i];
-        for(curr=bucket; curr!=NULL; curr=curr->next) {
-            file_t* curr = bucket->data;
-            curr->index--;
-        }
-    }
-    return key;
-}
-
-//gestore della terminazione
-static void gestore_term (int signum) {
-    if (signum==SIGINT || signum==SIGQUIT) {
-        term = 1;
-    } else if (signum==SIGHUP) {
-        //gestisci terminazione soft 
-        term = 2;
-    } 
-}
-
+//funzione chiamata dal thread worker
 void* workerFunction(void* args){
     int cfd;
     while(1){
@@ -546,6 +539,7 @@ void* workerFunction(void* args){
     return 0;
 }
 
+//funzione chiamata quando la richiesta è una apertura o creazione file
 int opn(type_t req, int cfd, char pathname[]){
     int answer = 0;
     file_t* tmp;
@@ -563,14 +557,15 @@ int opn(type_t req, int cfd, char pathname[]){
 
                 LOCK(&cachestatemtx);
                 cache_state->num_file++;
+
                 LOCK(&statisticsmtx);
                 if(cache_state->num_file > statistics->max_saved_file) statistics->max_saved_file = cache_state->num_file;
                 UNLOCK(&cachestatemtx);
                 UNLOCK(&statisticsmtx);
             }else{
                 //politica di rimpiazzo
-                char* key;
-                key = getMinIndex(cache);
+                char key[PATH_MAX];
+                getMinIndex(cache, key);
                 printf("[SERVER]replacement policy on %s\n", key);
                 hashtableDeleteNode(cache, key, freeFile);
                 hashtableInsert(cache, pathname, strlen(pathname)*sizeof(char), file, sizeof(file_t));
@@ -607,6 +602,7 @@ int opn(type_t req, int cfd, char pathname[]){
     return answer;
 }
 
+//funzione chiamata quando la richiesta è una scrittura di file
 int wrt(int cfd, char pathname[]){
     int answer = 0;
     int filesize;
@@ -631,10 +627,11 @@ int wrt(int cfd, char pathname[]){
             else{
                 LOCK(&cachestatemtx);
                 while(cache_state->free_space < filesize){
-                    char* key = getMinIndex(cache);
-                    file_t* tmp1 = hashtableFind(cache, (void*) key);
+                    char key[PATH_MAX];
+                    getMinIndex(cache, key);
+                    file_t* tmp1 = hashtableFind(cache, key);
                     int size = tmp1->size;
-                    printf("[SERVER]replacement policy on %s\n",(char*)key);
+                    printf("[SERVER]replacement policy on %s\n",key);
                     LOCK(&statisticsmtx);
                     statistics->switches++;
                     UNLOCK(&statisticsmtx);
@@ -669,6 +666,7 @@ int wrt(int cfd, char pathname[]){
     return answer;
 }
 
+//funzione chiamata quando la richiesta è una chiusura di file
 int cls(int cfd, char pathname[]){
     int answer = 0;
     file_t* tmp;
@@ -693,6 +691,7 @@ int cls(int cfd, char pathname[]){
     return answer;
 }
 
+//funzione chiamata quando la richiesta è una lettura di file
 int rd(int cfd, char pathname[]){
     file_t* tmp;
     int answer = 0;
@@ -721,6 +720,7 @@ int rd(int cfd, char pathname[]){
     return 0;
 }
 
+//funzione chiamata quando la richiesta è una rimozione di file
 int rm(int cfd, char pathname[]){
     int answer = 0;
     file_t* tmp;
@@ -744,6 +744,7 @@ int rm(int cfd, char pathname[]){
     return answer;
 }
 
+//funzione chiamata quando la richiesta è una lettura di un certo numero di file
 int rdn(int cfd, char info[]){
     int n = atoi(info);
     LOCK(&cachestatemtx);

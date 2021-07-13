@@ -99,7 +99,7 @@ void* hashtableGetNode(const Hashtable_t* hashtable, const void* key){
 	return NULL;
 }
 
-void* hashtableFind(const Hashtable_t* hashtable, const void* key){
+void* hashtableFind(const Hashtable_t* hashtable, char* key){
 	if (hashtable == NULL) return NULL;
 	size_t hash = hashtable->hashFunction(key) % hashtable->numbuckets;
 	Node_t* node = hashtable->buckets[hash];

@@ -18,7 +18,7 @@
 #include<time.h>
 #include<sys/stat.h>
 #include<dirent.h>
-#include<limits.h>
+#include<linux/limits.h>
 #include<dirent.h>
 #include<libgen.h>
 #include<fcntl.h>
@@ -31,7 +31,6 @@
 
 static char socketname[100];
 static int print_flag = 0;
-
 
 int arg_f(char* s_name);
 int parse_w(char* optarg, char* dirname, long* filetoSend);

@@ -34,7 +34,7 @@ int hashtableInsert(Hashtable_t*, const void*, size_t, const void*, size_t);
 
 void* hashtableGetEntry(const Hashtable_t*, const void*);
 
-void* hashtableFind(const Hashtable_t*, const void*);
+void* hashtableFind(const Hashtable_t*, char*);
 
 int hashtableDeleteNode(Hashtable_t*, char*, void (*free_data)(void*));
 
