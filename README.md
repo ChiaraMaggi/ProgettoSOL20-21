@@ -59,4 +59,6 @@ test : cartella con file utilizzati per i test (con sottocartella)
 
 test2 : cartella con i file utilizzati per test (senza sottocartella)
 
-dir1/2/3 : cartelle che vengono create dai test
+test3 : cartella con file utilizzati per i test (con sottocartella)
+
+dir1/2/3/4 : cartelle che vengono create dai test
