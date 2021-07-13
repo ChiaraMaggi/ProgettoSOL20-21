@@ -51,12 +51,14 @@ make cleanall : elimina tutti i file generati da make (eseguibili, oggetto, temp
 
 ->Struttura directory :
 
-configtest1 : contiene config.tx per il test 1
+configfile : contiene configtest1.txt e configtest2.txt per i due test
 
-configtest2 : contiene config.txt per il test 2
+script: contine i file test1.sh e test2.sh
 
 test : cartella con file utilizzati per i test (con sottocartella)
 
 test2 : cartella con i file utilizzati per test (senza sottocartella)
 
-dir1/2/3 : cartelle che vengono create dai test
+test3 : cartella con file utilizzati per i test (con sottocartella)
+
+dir1/2/3/4 : cartelle che vengono create dai test
