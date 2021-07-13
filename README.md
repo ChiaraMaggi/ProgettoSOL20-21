@@ -53,6 +53,8 @@ make cleanall : elimina tutti i file generati da make (eseguibili, oggetto, temp
 
 configfile : contiene configtest1.txt e configtest2.txt per i due test
 
+script: contine i file test1.sh e test2.sh
+
 test : cartella con file utilizzati per i test (con sottocartella)
 
 test2 : cartella con i file utilizzati per test (senza sottocartella)
